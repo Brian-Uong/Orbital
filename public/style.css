@@ -207,3 +207,7 @@ footer {margin-top:var(--shell-gap);padding-block:12px;border-color:var(--glass-
   .directory-grid,.report-grid,.lower-grid {grid-template-columns:minmax(0,1fr)}
 }
 @media(max-width:760px){.mast .actions{display:flex;flex-direction:row;flex-wrap:wrap;max-width:100%;width:auto;justify-content:flex-start}.mast .actions button{white-space:nowrap;max-width:none}}
+
+.auth-link{display:inline-flex;align-items:center;padding:7px 11px;border:1px solid #8dc4c7;border-radius:7px;background:#254355;color:#dcfff5;font-size:.78rem;font-weight:600}
+.auth-link:hover,.auth-link:focus-visible{background:#345767}
+.auth-link[hidden]{display:none}

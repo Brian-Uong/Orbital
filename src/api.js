@@ -244,10 +244,18 @@ async function report(bucket, agentId, request) {
   });
 }
 
+// Sites strips client identity headers at its edge and supplies these claims after sign-in.
+export function isStationOwner(request, env) {
+  const id = request.headers.get('oai-authenticated-user-id')?.trim();
+  const email = request.headers.get('oai-authenticated-user-email')?.trim().toLowerCase();
+  const owner = env.ORBIT_OWNER_EMAIL?.trim().toLowerCase();
+  return Boolean(id && owner && email === owner);
+}
+
 export async function handleApi(request, env) {
   try {
     const url = new URL(request.url);
-    const isVisitor = Boolean(request.headers.get('oai-authenticated-user-id')?.trim());
+    const owner = isStationOwner(request, env);
     const isMutation = !['GET','HEAD'].includes(request.method);
     const origin = request.headers.get('origin');
     if (isMutation && ((origin && origin !== url.origin) || request.headers.get('sec-fetch-site') === 'cross-site')) {
@@ -258,12 +266,15 @@ export async function handleApi(request, env) {
     const isRegister = request.method === 'POST' && url.pathname === '/api/agents';
     const reporting = request.method === 'POST' && url.pathname.match(/^\/api\/agents\/(agent-[a-f0-9-]{36})\/report$/);
     if (!isState && !isSync && !isRegister && !reporting) throw new ApiError(404, 'Endpoint not found.');
-    if (isSync || (isState && !isVisitor)) {
+    if (isSync || (isState && !owner) || (reporting && !owner)) {
       if (!await matchesKey(request.headers.get('Orbit-Sync-Key'), env.ORBIT_SYNC_KEY_HASH)) {
         throw new ApiError(401, 'An authorized station connection is required.');
       }
-    } else if (isRegister && !isVisitor) {
-      throw new ApiError(401, 'Sign in to register an agent.');
+    } else if (isRegister && !owner) {
+      throw new ApiError(401, 'Station owner sign-in is required.');
+    }
+    if (isMutation && owner && !isSync && origin !== url.origin) {
+      throw new ApiError(403, 'Owner updates require a same-origin request.');
     }
     if (!env.BUCKET) throw new ApiError(503, 'Station storage is unavailable.');
     if (isState) return json(await state(env.BUCKET));

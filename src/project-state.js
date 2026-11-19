@@ -1,4 +1,4 @@
-import {ApiError, json, bodyOf, matchesKey, conditionalUpdate} from './api.js';
+import {isStationOwner, ApiError, json, bodyOf, matchesKey, conditionalUpdate} from './api.js';
 
 const SECTOR_KEY = 'orbital/v2/project-state.json';
 const SECTOR_NAMES = new Map([
@@ -30,6 +30,27 @@ function stateTag(value) {
   return '"' + new Date(value.updatedAt).toISOString() + '"';
 }
 
+// Construct the visitor document from known fields. Never include raw project records.
+function visitorSnapshot(current) {
+  const statuses = new Set(['idle', 'waiting', 'blocked', 'error', 'completed', 'assigned', 'ready', 'working']);
+  const agents = Array.from(SECTOR_NAMES, ([id, name]) => {
+    const agent = current.agents.find(entry => entry.id === id);
+    const value = agent?.liveActivity?.status ?? agent?.status;
+    const status = statuses.has(value) ? value : 'unknown';
+    const time = Date.parse(agent?.liveActivity?.observedAt ?? agent?.lastSeen);
+    const age = Date.now() - time;
+    if (status === 'working' && age >= 0 && age < 300000) {
+      return {id, name, sourceType:'sector', status, lastSeen:new Date(time).toISOString()};
+    }
+    return {id, name, sourceType:'sector', status:status === 'working' ? 'unknown' : status};
+  });
+  return {
+    updatedAt:new Date(current.updatedAt).toISOString(),
+    commandCenter:{id:'control', name:'Control hub'},
+    agents, events:[], reports:[]
+  };
+}
+
 export async function handleProjectState(request, env, seed) {
   try {
     const read = request.method === 'GET' || request.method === 'HEAD';
@@ -38,11 +59,11 @@ export async function handleProjectState(request, env, seed) {
       response.headers.set('Allow', 'GET, HEAD, PUT');
       return response;
     }
-    const user = request.headers.get('oai-authenticated-user-id')?.trim();
-    // Sites consumes the service bearer at its private access boundary before forwarding.
-    // A service call must additionally prove possession of the station's existing writer key.
-    if (!(read && user) && !await matchesKey(request.headers.get('Orbit-Sync-Key'), env.ORBIT_SYNC_KEY_HASH)) {
-      throw new ApiError(401, 'Sign in to Orbital or use its authorized station connection.');
+    const owner = isStationOwner(request, env);
+    const key = request.headers.get('Orbit-Sync-Key');
+    const service = Boolean(key && await matchesKey(key, env.ORBIT_SYNC_KEY_HASH));
+    if ((key && !service) || (!read && !owner && !service)) {
+      throw new ApiError(401, 'Owner sign-in or an authorized station connection is required.');
     }
     if (!env.BUCKET) throw new ApiError(503, 'Station storage is unavailable.');
     if (read) {
@@ -50,10 +71,15 @@ export async function handleProjectState(request, env, seed) {
       const current = newer(record ? await record.json() : null, seed);
       const headers = {'Cache-Control':'private, no-store', 'Content-Type':'application/json; charset=utf-8',
         'X-Content-Type-Options':'nosniff', 'ETag':stateTag(current)};
-      return new Response(request.method === 'HEAD' ? null : JSON.stringify(current), {headers});
+      const document = (owner || service) ? current : visitorSnapshot(current);
+      headers['Orbit-Access'] = owner ? 'owner' : service ? 'service' :
+        request.headers.get('oai-authenticated-user-id') ? 'visitor' : 'anonymous';
+      return new Response(request.method === 'HEAD' ? null : JSON.stringify(document), {headers});
     }
     const origin = request.headers.get('origin');
-    if ((origin && origin !== new URL(request.url).origin) || request.headers.get('sec-fetch-site') === 'cross-site') {
+    const ownerBrowser = owner && !service;
+    const sameOrigin = origin === new URL(request.url).origin;
+    if (((ownerBrowser || origin) && !sameOrigin) || request.headers.get('sec-fetch-site') === 'cross-site') {
       throw new ApiError(403, 'Cross-origin updates are disabled.');
     }
     const expected = request.headers.get('if-match');

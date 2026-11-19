@@ -25,8 +25,8 @@ class MemoryBucket {
   }
 }
 
-const env = () => ({BUCKET:new MemoryBucket(),ORBIT_SYNC_KEY_HASH:createHash('sha256').update('service-key').digest('hex')});
-const USER = {'oai-authenticated-user-id':'owner'};
+const env = () => ({ORBIT_OWNER_EMAIL:'owner@example.test',BUCKET:new MemoryBucket(),ORBIT_SYNC_KEY_HASH:createHash('sha256').update('service-key').digest('hex')});
+const USER = {'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test',Origin:'https://station.example'};
 const SYNC = {'Orbit-Sync-Key':'service-key'};
 
 async function api(bindings, path, headers = {}, payload) {
@@ -47,7 +47,7 @@ test('reads require a visitor or service credential, registration requires a vis
   assert.equal((await api(bindings,'/api/sync',USER,{})).status,401);
   assert.equal((await api(bindings,'/api/agents',SYNC,{name:'New agent'})).status,401);
   assert.equal((await api(bindings,'/api/agents',{...USER,Origin:'https://other.example'},{name:'New agent'})).status,403);
-  assert.equal((await api({},'/api/state',USER)).status,503);
+  assert.equal((await api({ORBIT_OWNER_EMAIL:'owner@example.test'},'/api/state',USER)).status,503);
 });
 
 test('replacement, merge, exact replay, out-of-order and empty snapshots preserve actual source membership', async t => {
@@ -78,7 +78,7 @@ test('per-agent report key stays private, only updates its own agent, deduplicat
   const b = await api(bindings,'/api/agents',USER,{name:'Other bot',source:'Local'});
   assert.equal(a.status,201);
   assert.equal(a.data.agent.lastSeen,null);
-  const path=a.data.connection.path, key={'Orbit-Agent-Key':a.data.connection.token};
+  const path=a.data.connection.path, key={...SYNC,'Orbit-Agent-Key':a.data.connection.token};
   const body={task:'Reviewing a draft',status:'working',eventId:'draft:1'};
   assert.equal((await api(bindings,b.data.connection.path,key,body)).status,401);
   assert.equal((await api(bindings,path,SYNC,body)).status,401);

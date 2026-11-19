@@ -138,8 +138,8 @@ function render() {
   const filter=$('agentFilter').value;
   $('agentFilter').innerHTML='<option value="">All sectors</option>'+state.agents.map(a=>'<option value="'+escape(a.id)+'">'+escape(a.name)+'</option>').join('');
   $('agentFilter').value=state.agents.some(a=>a.id===filter)?filter:'';
-  renderJournal();$('reportHistory').innerHTML=state.reports.map(report).join('')||empty('The first briefing is pending.');
-  $('latestReport').innerHTML=state.reports.length?report(state.reports[0]):empty('The first briefing is pending.');connection();
+  renderJournal();$('reportHistory').innerHTML=state.reports.map(report).join('')||empty(document.body.dataset.access==='public'?'Briefings are available in the owner workspace.':'The first briefing is pending.');
+  $('latestReport').innerHTML=state.reports.length?report(state.reports[0]):empty(document.body.dataset.access==='public'?'Briefings are available in the owner workspace.':'The first briefing is pending.');connection();
 }
 function apply(raw) {
   if(raw===lastText){renderSelection();connection();return;}
@@ -153,9 +153,18 @@ function apply(raw) {
 function saveBlob(blob,name){const href=URL.createObjectURL(blob),el=document.createElement('a');el.href=href;el.download=name;document.body.append(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(href),30000);}
 async function readFile(file){if(file.size>10*1024*1024)throw Error('Choose a snapshot smaller than 10 MB.');return file.text();}
 function failure(err){issue=err instanceof SyntaxError?'The snapshot contains invalid JSON.':err.message||'The snapshot could not be read.';renderSelection();connection();}
+function showAccess(mode) {
+  const owner=mode==='owner', signed=owner||mode==='visitor';
+  const link=$('ownerAuth');
+  link.hidden=false;
+  link.textContent=owner?'Sign out':signed?'Switch account':'Owner sign in';
+  link.href=signed?'/signout-with-chatgpt?return_to=%2F':'/signin-with-chatgpt?return_to=%2F';
+  $('workspaceAccess').textContent=owner?'Owner workspace':'Public view';
+  document.body.dataset.access=owner?'owner':'public';
+}
 async function refresh(){if(busy||document.hidden)return;busy=true;try{
   if(watch){const handle=watch,raw=await readFile(await handle.getFile());if(handle===watch){issue='';apply(raw);}}
-  else if(!embedded){const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('The station feed is unavailable.');issue='';apply(await r.text());}
+  else if(!embedded){const r=await fetch('/api/state',{cache:'no-store',signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('The station feed is unavailable.');showAccess(r.headers.get('Orbit-Access'));issue='';apply(await r.text());}
   else {renderSelection();connection();}
 }catch(e){failure(e);}finally{busy=false;}}
 function route(event) {
@@ -191,7 +200,7 @@ if(embedded){$('loadSnapshot').hidden=false;$('loadSnapshot').onclick=async()=>{
   $('snapshotFile').onchange=async e=>{const f=e.target.files?.[0];if(!f)return;try{issue='';apply(await readFile(f));watch=null;connection();}catch(err){failure(err);}finally{e.target.value='';}};
   const zip=$('orbital-desktop');if(zip){$('downloadDesktop').hidden=false;$('downloadDesktop').onclick=()=>saveBlob(new Blob([Uint8Array.from(atob(zip.textContent.trim()),c=>c.charCodeAt(0))],{type:'application/zip'}),'Orbital-Desktop.zip');}
   try{apply(embedded.textContent);}catch(e){failure(e);}
-}else{$('refresh').hidden=false;refresh();}
+}else{$('refresh').hidden=false;showAccess('anonymous');refresh();}
 let timer;function polling(){clearInterval(timer);if(!document.hidden){refresh();timer=setInterval(refresh,15000);}}
 document.addEventListener('visibilitychange',polling);window.addEventListener('pageshow',polling);window.addEventListener('pagehide',e=>{clearInterval(timer);if(!e.persisted)station.destroy();});
 polling();

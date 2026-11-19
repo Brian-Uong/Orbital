@@ -14,11 +14,11 @@
 <aside class="rail">
   <a class="brand" href="#overview" aria-label="Orbital home"><span class="brandmark" aria-hidden="true"><i></i></span>Orbital</a>
   <nav aria-label="Workspace"><a data-page="overview" href="#overview"><span class="navmark home" aria-hidden="true"></span><span>Command</span></a><a data-page="agents" href="#agents"><span class="navmark team" aria-hidden="true"></span><span>Directory</span></a><a data-page="activity" href="#activity"><span class="navmark reports" aria-hidden="true"></span><span>Briefings</span></a></nav>
-  <div class="rail-end"><div class="profile"><b>OR</b><span>Station owner<small>Private workspace</small></span></div></div>
+  <div class="rail-end"><div class="profile"><b>OR</b><span>Station owner<small id="workspaceAccess">Orbital workspace</small></span></div></div>
 </aside>
 <main id="main" tabindex="-1">
 <header class="mast"><div><p class="dateline" id="dateLine"></p><h1 id="pageTitle">Mission control</h1></div>
-<div class="actions"><button id="loadSnapshot" hidden>Open snapshot</button><button id="downloadDesktop" class="accent" hidden>Download desktop</button><button id="refresh" hidden>Refresh station</button><input type="file" id="snapshotFile" accept=".json,application/json" hidden></div></header>
+<div class="actions"><a class="auth-link" id="ownerAuth" href="/signin-with-chatgpt?return_to=%2F" target="_top" hidden>Owner sign in</a><button id="loadSnapshot" hidden>Open snapshot</button><button id="downloadDesktop" class="accent" hidden>Download desktop</button><button id="refresh" hidden>Refresh station</button><input type="file" id="snapshotFile" accept=".json,application/json" hidden></div></header>
 <div id="notice" role="status" hidden></div>
 <section id="overviewView" aria-label="Mission control">
 <div class="readouts"><div><span class="key">Assigned sectors</span><strong id="assignedCount">&mdash;</strong></div><div><span class="key"><i class="dot working"></i>Working now</span><strong id="workingCount">&mdash;</strong></div><div><span class="key"><i class="dot attention"></i>Need attention</span><strong id="attentionCount">&mdash;</strong></div><div><span class="key">Next briefing</span><strong id="briefTime">&mdash;</strong></div></div>
