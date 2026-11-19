@@ -1,0 +1,12 @@
+dist/
+node_modules/
+.local/
+.env
+.env.*
+*.tar.gz
+
+.openai/hosting.json
+Orbital-Agent-State.json
+Orbital.html
+Orbital-Desktop.zip
+outputs/

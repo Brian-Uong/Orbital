@@ -1,0 +1,41 @@
+{
+  "updatedAt": "2026-01-01T00:00:00Z",
+  "commandCenter": {
+    "id": "control",
+    "name": "Control hub"
+  },
+  "agents": [
+    {
+      "id": "professional",
+      "name": "Professional",
+      "status": "idle",
+      "sourceType": "sector"
+    },
+    {
+      "id": "product-design",
+      "name": "Product Design",
+      "status": "idle",
+      "sourceType": "sector"
+    },
+    {
+      "id": "personal-dashboard",
+      "name": "Personal Dashboard",
+      "status": "idle",
+      "sourceType": "sector"
+    },
+    {
+      "id": "personal-website",
+      "name": "Personal Website",
+      "status": "idle",
+      "sourceType": "sector"
+    },
+    {
+      "id": "financial-advice",
+      "name": "Financial Advice",
+      "status": "idle",
+      "sourceType": "sector"
+    }
+  ],
+  "reports": [],
+  "events": []
+}

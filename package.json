@@ -1,0 +1,12 @@
+{
+  "name": "orbital-agent-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test",
+    "start": "node scripts/preview.mjs",
+    "portable": "node scripts/standalone.mjs examples/station.json dist/Orbital.html"
+  }
+}

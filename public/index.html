@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#162c44">
+  <title>Mission control | Orbital</title>
+  <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48 64x64"><link rel="icon" type="image/png" sizes="64x64" href="/orbit-v2.png">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to workspace</a>
+<aside class="rail">
+  <a class="brand" href="#overview" aria-label="Orbital home"><span class="brandmark" aria-hidden="true"><i></i></span>Orbital</a>
+  <nav aria-label="Workspace"><a data-page="overview" href="#overview"><span class="navmark home" aria-hidden="true"></span><span>Command</span></a><a data-page="agents" href="#agents"><span class="navmark team" aria-hidden="true"></span><span>Directory</span></a><a data-page="activity" href="#activity"><span class="navmark reports" aria-hidden="true"></span><span>Briefings</span></a></nav>
+  <div class="rail-end"><div class="profile"><b>OR</b><span>Station owner<small>Private workspace</small></span></div></div>
+</aside>
+<main id="main" tabindex="-1">
+<header class="mast"><div><p class="dateline" id="dateLine"></p><h1 id="pageTitle">Mission control</h1></div>
+<div class="actions"><button id="loadSnapshot" hidden>Open snapshot</button><button id="downloadDesktop" class="accent" hidden>Download desktop</button><button id="refresh" hidden>Refresh station</button><input type="file" id="snapshotFile" accept=".json,application/json" hidden></div></header>
+<div id="notice" role="status" hidden></div>
+<section id="overviewView" aria-label="Mission control">
+<div class="readouts"><div><span class="key">Assigned sectors</span><strong id="assignedCount">&mdash;</strong></div><div><span class="key"><i class="dot working"></i>Working now</span><strong id="workingCount">&mdash;</strong></div><div><span class="key"><i class="dot attention"></i>Need attention</span><strong id="attentionCount">&mdash;</strong></div><div><span class="key">Next briefing</span><strong id="briefTime">&mdash;</strong></div></div>
+<div class="hero-grid">
+<article class="map-panel"><div class="floor-head"><div class="scene-title"><span class="crosshair" aria-hidden="true"></span><h2>Sector network</h2></div><div class="scene-tools"><button id="sceneFocus" aria-pressed="false">Focus station</button><button id="labels" aria-pressed="true" title="Toggle station labels">Labels</button></div></div>
+<div class="viewport"><canvas id="map" tabindex="0" aria-label="3D project district. Drag or use arrow keys to orbit. Select a room to inspect its sector."></canvas><div class="scene-caption"><b id="sceneCaption">Station status</b><span id="sceneEvidence"></span></div></div>
+<div class="camera-strip"><span>Drag to orbit</span><button id="orbitLeft" aria-label="Rotate left">&#8630;</button><button id="orbitRight" aria-label="Rotate right">&#8631;</button><button id="zoomOut" aria-label="Zoom out">&minus;</button><button id="zoomIn" aria-label="Zoom in">+</button></div><div class="map-foot"><button type="button" class="core" id="hubControl" aria-haspopup="dialog"><i></i><span id="coreName">Control hub</span> &#8599;</button><span id="sectorCount"></span><div class="scene-bar"><button id="sceneMode" aria-pressed="false">Replay work</button><button id="scenePlay" aria-pressed="true">Pause motion</button></div></div></article>
+<section class="panel dispatch" aria-label="Sector roster and details">
+<div id="rosterPane"><header class="panel-head"><h2>Project agents</h2><span class="count" id="rosterCount"></span></header><div id="roster"></div><div class="roster-update"><span class="key">Last observation</span><span id="rosterTime"></span></div></div>
+<div id="briefPane" hidden><button class="back" id="backRoster" type="button">&larr; Sector roster</button><article id="inspector" class="inspector"></article></div>
+</section></div>
+<div class="lower-grid"><section class="panel"><header class="panel-head"><h2>Latest briefing</h2><a class="more" href="#activity">All briefings &nearr;</a></header><div id="latestReport"></div></section>
+<section class="panel"><header class="panel-head"><h2>Recent activity</h2><a class="more" href="#activity">Full journal &nearr;</a></header><div id="recentEvents"></div></section></div>
+</section>
+<section id="agentsView" hidden aria-label="Sector directory"><div class="directory-grid"><div class="panel"><header class="panel-head"><h2>All sectors</h2><input id="agentSearch" type="search" aria-label="Find a sector or assignment" placeholder="Search sectors"></header><div id="directory"></div></div><article class="panel inspector" id="directoryInspector"></article></div></section>
+<section id="activityView" aria-label="Briefings and activity" hidden><div class="report-grid"><article class="panel"><header class="panel-head"><h2>Six-hour briefings</h2></header><div id="reportHistory"></div></article><article class="panel"><header class="panel-head"><h2>Activity journal</h2><select id="agentFilter" aria-label="Filter activity by sector"><option value="">All sectors</option></select></header><div id="activity"></div></article></div></section>
+<dialog id="hubDialog" aria-labelledby="hubTitle"><div class="hub-top"><div><p class="key">Operations</p><h2 id="hubTitle">Control hub</h2></div><form method="dialog"><button aria-label="Close control hub">Close</button></form></div><div class="hub-body"><h3>Orbital Operations Coordinator</h3><p>Directs sector assignments, checks returned evidence and prepares the six-hour briefing.</p><a id="coordinatorLink" class="hub-link" hidden target="_blank" rel="noopener noreferrer">Open coordinator conversation &#8599;</a><h4>Sector assignments</h4><div id="hubSectors"></div></div></dialog><footer><span>Orbital workspace</span><span id="checkTime"></span></footer>
+</main></body></html>
