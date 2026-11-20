@@ -297,13 +297,57 @@ function reviewFacts(row) {
     caption('Limitations at review', row.limitations) + caption('Reviewed branch and base', target) +
     caption('Reviewed patch SHA-256', row.diffSha256);
 }
-function releaseDescription(row) {
-  const result = row.liveUrl ? artifactLink(row.liveUrl,'Open live site') : artifactLink(row.prUrl || row.githubUrl,'Open published result');
-  return '<article class="workspace-card panel"><h3>'+esc(row.title || row.id)+'</h3><p>'+esc(reviewOutcome(row))+'</p>'+
-    '<p class="workspace-meta">'+esc(row.status)+' · '+esc(row.id)+'</p>'+
-    (row.releaseProgress ? '<p>'+esc(row.releaseProgress)+'</p>' : '')+
+const repairStatuses=new Set(['blocked','failed','needs work','needs changes','revision required','changes requested']);
+function verifiedRelease(row) {
+  return lower(row.status)==='published and verified' && Boolean(instant(row.verifiedAt) &&
+    [row.liveUrl,row.prUrl,row.githubUrl].some(safeLink));
+}
+function releaseLane(row) {
+  const status=lower(row.status);
+  if(['denied','declined','closed','cancelled','canceled','superseded','deferred'].includes(status))return 'archive';
+  if(repairStatuses.has(status) || text(row.releaseError))return 'blocked';
+  if(verifiedRelease(row))return 'published';
+  if(['publishing','published','pushed','deployed','verifying','awaiting verification','published and verified'].includes(status))return 'publishing';
+  if(row.approvalId && status!=='awaiting owner approval' || ['approved','approved queued','queued for release'].includes(status))return 'queued';
+  if(row.responseId)return 'blocked';
+  if(ownerDecision(row))return 'pending';
+  return 'blocked';
+}
+function releaseDescription(row, {allowRepair=false, project=''}={}) {
+  const lane=releaseLane(row),verified=lane==='published';
+  const result=artifactLink(row.liveUrl,verified?'Open verified live site':'Open site (verification pending)')+
+    artifactLink(row.prUrl,verified?'Open verified pull request':'Open pull request')+
+    artifactLink(row.githubUrl,verified?'Open verified GitHub result':'Open GitHub result');
+  const status=verified?(row.liveUrl?'Published and verified':row.prUrl?'Pull request pushed and verified; production deployment is not recorded':'GitHub push verified; production deployment is not recorded'):
+    lane==='queued'?'Approved; waiting for the hourly coordinator':lane==='publishing'?'Publishing or awaiting verification':text(row.status) || 'Needs clarification';
+  const facts=lane==='blocked'?'<dl class="wait-requirements">'+
+    caption('What needs fixing',row.releaseError || row.blocker || row.waitingDetails?.needed || row.releaseProgress || 'The coordinator has not recorded the blocker yet.')+
+    caption('Next step',row.repairAction || row.waitingDetails?.nextAction || row.nextAction || (row.responseId?'The requested revision is already queued. The coordinator will return it for approval.':'Use Fix and resubmit to give instructions. AI will prepare a new review on the next unpaused hourly run.'))+'</dl>':'';
+  const controls=allowRepair && lane==='blocked' && !row.responseId &&
+    ['blocked','failed','needs work','needs changes','revision required'].includes(row.status)?
+    '<div class="review-buttons repair-actions"><button type="button" data-edit-review="'+esc(row.id)+'" data-fix-review>Fix and resubmit</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div>':'';
+  const timestamp=verified?'<p class="workspace-meta">Verified '+date(row.verifiedAt)+'</p>':'';
+  return '<article class="workspace-card panel release-card" data-release-id="'+esc(row.id)+'"><h3>'+esc(row.title || row.id)+'</h3>'+
+    (project?'<p class="release-project">'+esc(project)+'</p>':'')+'<p>'+esc(reviewOutcome(row))+'</p>'+
+    '<p class="release-state release-state-'+lane+'">'+esc(status)+'</p>'+timestamp+
+    (row.releaseProgress && lane!=='blocked'?'<p>'+esc(row.releaseProgress)+'</p>':'')+facts+
     '<details><summary>Scope, tests and evidence</summary><dl class="workspace-fields">'+reviewFacts(row)+'</dl>'+
-    artifactLink(row.diffUrl || row.evidenceUrl || row.artifactUrl || list(row.sources)[0]?.url,'Open reviewed evidence')+'</details>'+result+'</article>';
+    artifactLink(row.diffUrl || row.evidenceUrl || row.artifactUrl || list(row.sources)[0]?.url,'Open reviewed evidence')+'</details>'+
+    (result?'<div class="wait-links">'+result+'</div>':'')+controls+'</article>';
+}
+function releaseGroups(reviews,sectors,allowRepair) {
+  const groups=[['blocked','Blocked or needs work','Resolve the blocker or request a revision. Changed work returns for your approval.'],
+    ['queued','Approved and queued','Approved work waiting for the hourly coordinator. It has not been confirmed as pushed.'],
+    ['publishing','Publishing or awaiting verification','A push may be in progress or recorded, but verified completion is still pending.'],
+    ['published','Published and verified','Recorded completion with a verification timestamp and a result link. A verified pull request does not mean production was deployed.']];
+  return groups.map(([key,title,description])=>{
+    const rows=reviews.filter(r=>releaseLane(r)===key && !(r.responseId && reviews.some(c=>c.revisionOfResponseId===r.responseId)));
+    return '<section class="release-group release-group-'+key+'" aria-labelledby="release-heading-'+key+'"><header><h2 id="release-heading-'+key+'">'+title+'</h2><span class="release-count">'+rows.length+'</span></header><p class="release-help">'+description+'</p>'+
+      (rows.length?'<div class="release-list">'+rows.map(r=>{
+        const p=sectors.find(s=>s.id===(r.project || r.projectId) || s.name===(r.project || r.projectId));
+        return '<details class="release-item" data-decision-key="review/'+esc(r.id)+'"><summary><span>'+esc(r.title || r.id)+'</span><small>'+esc(p?.name || r.projectName || r.project || r.projectId || 'Project unrecorded')+'</small></summary>'+releaseDescription(r,{allowRepair,project:p?.name || r.projectName || r.project || r.projectId})+'</details>';
+      }).join('')+'</div>':empty('No items in this section.'))+'</section>';
+  }).join('');
 }
 function decisionInbox(sectors, records, waiting) {
   const projects = new Map(sectors.flatMap((sector,order) => {
@@ -331,7 +375,7 @@ function decisionInbox(sectors, records, waiting) {
     }
   }
   for (const [id,row] of registry) {
-    if (row.responseId || (row.approvalId && row.status !== 'awaiting owner approval') || stationProject(row) || row.approvalRequired === false || row.releaseMode === 'automatic' || !ownerDecision(row)) continue;
+    if (releaseLane(row)!=='pending' || row.responseId || (row.approvalId && row.status !== 'awaiting owner approval') || stationProject(row) || row.approvalRequired === false || row.releaseMode === 'automatic' || !ownerDecision(row)) continue;
     const fallback = mirror.get(id);
     const projectKey = text(row.project || row.projectId || fallback?.row.project || fallback?.sector.id);
     const project = projects.get(lower(projectKey));
@@ -383,7 +427,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       historyHtml = selected ? sectorHistory(selected,rowsFor(selected)) :
         '<div class="workspace-grid">' + sectors.map(sector => historyCard(sector,rowsFor(sector))).join('') + '</div>';
       const released=list(snapshot?.commandCenter?.execution?.releaseReviews).filter(row =>
-        row.status==='published and verified' && !stationProject(row) && (!selected || row.project===selected.id || row.projectId===selected.id));
+        verifiedRelease(row) && !stationProject(row) && (!selected || row.project===selected.id || row.projectId===selected.id));
       if(released.length && activeKind==='all') historyHtml='<section><h2>Verified project releases</h2>'+released.map(releaseDescription).join('')+'</section>'+historyHtml;
       return historyHtml;
     },
@@ -399,9 +443,11 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     },
     get decisions() {
       if (decisionsHtml !== undefined) return decisionsHtml;
-      const releases = list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>r.approvalId && !r.responseId);
-      const progress = releases.length ? '<section class="release-progress"><h2>Approved releases</h2><ul>'+releases.map(r=>
-        '<li>'+releaseDescription(r)+'</li>').join('')+'</ul></section>' : '';
+      const releases=list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>{
+        const approver=text(r.ownerDecision?.approver || r.approval?.approver || r.approver || r.decisionOwner);
+        return !stationProject(r) && r.approvalRequired!==false && r.releaseMode!=='automatic' && (!approver || /^(brian( uong)?|owner)$/i.test(approver));
+      });
+      const progress=releaseGroups(releases,sectors,allowSkip);
       const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);
       const responseHistory = ['revise','deny'].map(decision=>{
         const rows=responses.filter(r=>r.decision===decision);
@@ -415,13 +461,14 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
             (receipt.instructions?'<h4>Your instructions</h4><p class="review-copy">'+esc(receipt.instructions)+'</p>':'')+'</li>';
         }).join('')+'</ul></details>';
       }).join('');
-      return decisionsHtml = decisionList(decisions,allowSkip)+progress+responseHistory;
+      return decisionsHtml = '<section class="release-group release-group-pending"><header><h2>Awaiting your approval</h2><span class="release-count">'+decisions.length+'</span></header>'+decisionList(decisions,allowSkip)+'</section>'+progress+responseHistory;
     },
     get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions); },
     count:decisions.length,
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
+
 
 
 

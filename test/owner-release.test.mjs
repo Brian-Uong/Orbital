@@ -6,10 +6,10 @@ import {handleProjectState} from '../src/project-state.js';
 import {workspaceViews} from '../public/workspace.js';
 const seed=JSON.parse(readFileSync(new URL('../examples/station.json',import.meta.url)));
 const owner={'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test',origin:'https://test.example'};
-function setup(){
+function setup(overrides={}){
  let stored=null,rev=0;
  const base=structuredClone(seed);base.updatedAt='2024-01-01T00:00:00Z';
- const review={id:'TEST',project:base.agents[0].id,title:'Sample release',action:'Deploy tested revision',destination:'Sample site',status:'awaiting owner approval'};
+ const review={id:'TEST',project:base.agents[0].id,title:'Sample release',action:'Deploy tested revision',destination:'Sample site',status:'awaiting owner approval',...overrides};
  base.commandCenter.execution={releaseReviews:[review]};
  const env={ORBIT_OWNER_EMAIL:'owner@example.test',BUCKET:{get:async()=>stored&&{etag:String(rev),json:async()=>structuredClone(stored)},put:async(k,v,{onlyIf})=>{if(onlyIf.etagMatches&&onlyIf.etagMatches!==String(rev))return null;stored=JSON.parse(v);return {etag:String(++rev)};}}};
  const request=(path,body,tag,headers=owner)=>handleProjectState(new Request('https://test.example'+path,{method:body?(path==='/api/state'?'PUT':'POST'):'GET',headers:{...headers,'Content-Type':'application/json',...(tag?{'If-Match':tag}:{})},body:body?JSON.stringify(body):undefined}),env,base);
@@ -19,6 +19,35 @@ function setup(){
 const service={'Orbit-Sync-Key':'synthetic-service'};
 async function stateOf(request,headers=owner){const r=await request('/api/state',null,null,headers);return {data:await r.json(),tag:r.headers.get('ETag')};}
 function advance(data){data.updatedAt=new Date(Math.max(Date.now(),Date.parse(data.updatedAt)+1)).toISOString();return data;}
+
+test('a blocked approved release can be repaired without losing approval history or approving its replacement',async()=>{
+ const {request,review}=setup();let current=await stateOf(request);
+ await request('/api/release-approval',{reviewId:review.id,expectedReview:JSON.stringify(review)},current.tag);
+ current=await stateOf(request);const next=advance(structuredClone(current.data));
+ const blocked=next.commandCenter.execution.releaseReviews[0];blocked.status='blocked';blocked.releaseError='Target changed; rebuild the patch.';
+ assert.equal((await request('/api/state',next,current.tag,service)).status,200);
+ current=await stateOf(request);const row=current.data.commandCenter.execution.releaseReviews[0];
+ assert.equal((await request('/api/release-approval',{reviewId:row.id,expectedReview:JSON.stringify(row)},current.tag)).status,409);
+ const body={decision:'revise',reviewId:row.id,expectedReview:JSON.stringify(row),instructions:'Rebase and test; keep the original copy.'};
+ assert.equal((await request('/api/release-response',body,current.tag)).status,200);
+ assert.equal((await (await request('/api/release-response',body,current.tag)).json()).applied,false);
+ const saved=(await stateOf(request)).data.commandCenter.execution;
+ assert.equal(saved.ownerApprovals.length,1);assert.equal(saved.ownerReviewResponses.length,1);
+ assert.equal(saved.releaseReviews[0].approvalId,saved.ownerApprovals[0].id);
+ assert.ok(saved.releaseReviews[0].responseId);assert.equal(saved.releaseReviews[0].status,'changes requested');
+ assert.equal(workspaceViews((await stateOf(request)).data).count,0);
+});
+
+test('repair requests cannot modify a currently publishing or completed release',async()=>{
+ for(const status of ['publishing','published and verified','denied']){
+  const {request,review}=setup({status});const {tag}=await stateOf(request);
+  assert.equal((await request('/api/release-response',{reviewId:review.id,expectedReview:JSON.stringify(review),decision:'revise',instructions:'Change it'},tag)).status,409);
+ }
+ for(const status of ['blocked','failed','needs work','needs changes','revision required']){
+  const {request,review}=setup({status});const {tag}=await stateOf(request);
+  assert.equal((await request('/api/release-response',{reviewId:review.id,expectedReview:JSON.stringify(review),decision:'revise',instructions:'Fix the blocker'},tag)).status,200);
+ }
+});
 
 test('denial is private, immutable, replay-safe and removes the pending idea',async()=>{
  const {request,review}=setup();const {tag}=await stateOf(request);
@@ -87,7 +116,7 @@ test('approval is owner-only, revision-bound, idempotent and retained for execut
  const current=await request('/api/state');const data=await current.json();assert.equal(data.commandCenter.execution.ownerApprovals.length,1);
  assert.equal(data.commandCenter.execution.ownerApprovals[0].id,receipt.approvalId);
  assert.deepEqual(data.commandCenter.execution.ownerApprovals[0].review,review);
- const view=workspaceViews(data,{allowSkip:true});assert.equal(view.count,0);assert.match(view.decisions,/Approved releases/);assert.doesNotMatch(view.decisions,/data-approve-review/);
+ const view=workspaceViews(data,{allowSkip:true});assert.equal(view.count,0);assert.match(view.decisions,/Approved and queued/);assert.doesNotMatch(view.decisions,/data-approve-review/);
  const lost=structuredClone(data);lost.updatedAt=new Date().toISOString();lost.commandCenter.execution.ownerApprovals=[];
  assert.equal((await request('/api/state',lost,current.headers.get('ETag'))).status,409);
  assert.doesNotMatch(await (await request('/api/state',null,null,{})).text(),/TEST|ownerApprovals|Sample release/);

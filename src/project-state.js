@@ -239,8 +239,8 @@ export async function handleProjectState(request, env, seed) {
           if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
           const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
           if (!review || JSON.stringify(review) !== intent.expectedReview || review.responseId ||
-              !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review'].includes(review.status)) {
-            throw new ApiError(409,'This idea is no longer awaiting your decision.');
+              !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review','blocked','failed','needs work','needs changes','revision required'].includes(review.status)) {
+            throw new ApiError(409,'This idea is no longer awaiting a decision or repair request.');
           }
           const at = new Date(Math.max(Date.now(),Date.parse(current.updatedAt)+1)).toISOString();
           const receipt = {id:'owner-response/'+review.id+'/'+at,reviewId:review.id,at,source:'Owner Needs Brian',
@@ -336,5 +336,6 @@ export async function handleProjectState(request, env, seed) {
       error instanceof ApiError ? error.status : 503);
   }
 }
+
 
 

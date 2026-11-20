@@ -21,3 +21,10 @@ The receipt captures the original review plus both fields exactly. The original 
 Service writes cannot discard responses, reopen denied originals, or introduce a pre-approved child. Each child requires a fresh owner approval before its external release. Paused workflows retain requests without executing them. The UI reports queued work as queued, never as completed or running without evidence.
 
 Keep response contents and private artifacts out of the public source mirror. This file documents the protocol only.
+
+
+## Release stages and repairs
+
+Needs Brian separates Awaiting your approval, Blocked or needs work, Approved and queued, Publishing or awaiting verification, and Published and verified. Completion requires status published and verified plus a valid verifiedAt timestamp and a safe live, PR or GitHub result URL. PR verification is distinct from production deployment.
+
+The response endpoint also accepts deny/revise on blocked, failed, needs work, needs changes, and revision required reviews that do not already have a responseId. Fix and resubmit opens the existing editor with the blocker as editable instructions. A repair preserves any earlier approval receipt but creates a responseId that stops the old release path. The coordinator must reconcile remote outcomes before repairing a partially pushed change, then return a fresh child review for approval. Do not automatically replay an uncertain deployment. Requests with an existing response are tracked under Requested revisions; their child is shown in its current stage.

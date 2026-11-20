@@ -146,11 +146,13 @@ test('Needs Brian numbers individual reviews under their own project and keeps s
     researchFollowup:mirror(['AUTO'],'Orbital Build')};
   const data=workspaceViews({agents:[{id:'alpha',name:'Alpha'},beta],commandCenter:{execution:{releaseReviews:rows}}});
   assert.equal(data.count,3);
+  const pendingHtml=data.decisions.split('<section class="release-group release-group-blocked"')[0];
   assert.equal((data.decisions.match(/<details name="owner-decisions"/g)||[]).length,3);
-  assert.equal((data.decisions.match(/<summary>/g)||[]).length,3);
+  assert.equal((pendingHtml.match(/<summary>/g)||[]).length,3);
   assert.ok(data.decisions.includes('<ol role="list"'));
   assert.match(data.decisions,/Alpha first[\s\S]+Beta first[\s\S]+Beta second/);
-  assert.doesNotMatch(data.decisions,/Legacy group|Station release|Already complete|Other approver|<details[^>]+ open\b/);
+  assert.doesNotMatch(pendingHtml,/Legacy group|Station release|Already complete|Other approver|<details[^>]+ open\b/);
+  assert.doesNotMatch(data.decisions,/Station release|Other approver/);
   assert.doesNotMatch(data.roadmap,/Legacy group AUTO/);
   assert.doesNotMatch(data.waiting,/Legacy group AUTO/);
 });
@@ -204,7 +206,6 @@ test('Command handles an empty queue and keeps legacy assignment decisions reach
   assert.doesNotMatch(data.waiting,/javascript:|Review evidence/);
 });
 
-
 test('waiting items explain recorded requirements, ownership and next steps without inventing owner tasks',()=>{
  const row={tag:'professional-020',status:'blocked',task:'Compare the profile',blocker:'Source file missing',
   waitingDetails:{needed:'A dated profile export',owner:'Brian',ownerAction:'Upload the profile export.',
@@ -233,4 +234,30 @@ test('top-level waiting metadata survives projection and untrusted instructions 
   owner:'Coordinator',ownerAction:'Wait for clarification',nextAction:'Read the source',actionUrl:'javascript:bad()'}}).waiting;
  assert.match(html,/&lt;img/);assert.match(html,/Wait for clarification/);assert.match(html,/Read the source/);
  assert.doesNotMatch(html,/<img|javascript:bad/);
+});
+
+test('release groups separate approval, execution, verified publication and repairs with safe controls',()=>{
+ const reviews=[
+  {id:'pending',title:'Pending only',status:'awaiting owner approval',action:'Deploy',destination:'Example'},
+  {id:'queued',title:'Queued only',status:'approved queued',approvalId:'approval-1'},
+  {id:'inflight',title:'In-flight only',status:'publishing',approvalId:'approval-2'},
+  {id:'published',title:'Verified site only',status:'published and verified',liveUrl:link('live'),verifiedAt:stamp(1)},
+  {id:'pr',title:'Verified PR only',status:'published and verified',prUrl:link('pr'),verifiedAt:stamp(2)},
+  {id:'unverified',title:'Missing receipt only',status:'published and verified',liveUrl:link('unverified')},
+  {id:'blocked',title:'Blocked only',status:'blocked',approvalId:'approval-3',releaseError:'Patch base changed',repairAction:'Rebase on the current source'},
+  {id:'needs-work',title:'Needs work only',status:'needs work'},
+ ].map(r=>({...r,project:'alpha'}));
+ const snapshot={agents:[{id:'alpha',name:'Alpha'}],commandCenter:{execution:{releaseReviews:reviews}}};
+ const view=workspaceViews(snapshot,{allowSkip:true});const html=view.decisions;
+ const section=key=>html.match(new RegExp('<section class="release-group release-group-'+key+'"[^>]*>[\\s\\S]*?</section>'))?.[0] || '';
+ assert.equal(view.count,1);
+ assert.match(section('pending'),/Pending only/);assert.doesNotMatch(section('pending'),/Blocked only/);
+ assert.match(section('queued'),/Queued only/);assert.doesNotMatch(section('queued'),/Verified site only|Blocked only/);
+ assert.match(section('publishing'),/In-flight only/);assert.match(section('publishing'),/Missing receipt only/);
+ assert.match(section('published'),/Verified site only/);assert.match(section('published'),/Verified PR only/);
+ assert.match(section('published'),/production deployment is not recorded/);
+ assert.doesNotMatch(section('published'),/Missing receipt only|Blocked only/);
+ assert.match(section('blocked'),/Patch base changed/);assert.match(section('blocked'),/Rebase on the current source/);
+ assert.match(section('blocked'),/data-fix-review/);assert.doesNotMatch(section('blocked'),/data-approve-review/);
+ assert.doesNotMatch(workspaceViews(snapshot).decisions,/data-fix-review/);
 });

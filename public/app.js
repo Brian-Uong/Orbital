@@ -437,9 +437,13 @@ $('needsBody').addEventListener('click',async event=>{
   const review=state.snapshot?.commandCenter.execution?.releaseReviews?.find(r=>r.id===id);if(!review)return;
   if(button.hasAttribute('data-edit-review')){
     editingReview=structuredClone(review);editOpener=button;
+    const repair=button.hasAttribute('data-fix-review');
+    $('reviewEditorTitle').textContent=repair?'Fix and resubmit':'Edit and request a revision';
+    $('reviewEditSubmit').textContent=repair?'Queue fix for review':'Queue revised idea';
     $('reviewEditTitle').textContent=review.title || review.id;
     $('reviewEditedOutput').value=[review.proposedOutput,review.output,review.summary].find(v=>typeof v==='string'&&v.trim()) || '';
-    $('reviewInstructions').value='';$('reviewEditNotice').textContent='';
+    $('reviewInstructions').value=repair?'Resolve this blocker and return the corrected result for my approval: '+(review.releaseError || review.blocker || review.waitingDetails?.needed || review.releaseProgress || 'Identify and fix the recorded release problem.') : '';
+    $('reviewEditNotice').textContent=repair?'This requests a correction. It does not approve another push.':'';
     reviewEditor.showModal();$('reviewEditedOutput').focus();return;
   }
   const decision=button.hasAttribute('data-deny-review')?'deny':'approve';
@@ -530,5 +534,6 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
+
 
 
