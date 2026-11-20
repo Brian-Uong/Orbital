@@ -6,8 +6,14 @@ import {latestDesktopState} from './desktop-state.mjs';
 const assets = new Map([
   ['/', ['public/index.html', 'text/html']],
   ['/index.html', ['public/index.html', 'text/html']],
+  ['/skip.js', ['public/skip.js', 'text/javascript']],
+  ['/workspace.js', ['public/workspace.js', 'text/javascript']],
   ['/app.js', ['public/app.js', 'text/javascript']],
   ['/station.js', ['public/station.js', 'text/javascript']],
+  ['/tower.js', ['public/tower.js', 'text/javascript']],
+  ['/roster.js', ['public/roster.js', 'text/javascript']],
+  ['/tower-street.svg', ['public/tower-street.svg', 'image/svg+xml']],
+  ['/orbital-floor.webp', ['public/orbital-floor.webp', 'image/webp']],
   ['/orbital-city.webp', ['public/orbital-city.webp', 'image/webp']],
   ['/favicon.ico', ['public/favicon.ico', 'image/x-icon']],
   ['/orbit-v2.png', ['public/orbit-v2.png', 'image/png']],
@@ -30,7 +36,8 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     if (pathname === '/api/state') {
       const state = await latestDesktopState();
-      res.writeHead(state ? 200 : 503, {'Content-Type': 'application/json; charset=utf-8'});
+      // The example viewer displays private-mode UI without enabling hosted owner writes.
+      res.writeHead(state ? 200 : 503, {'Content-Type': 'application/json; charset=utf-8', 'Orbit-Access': 'service'});
       res.end(req.method === 'HEAD' ? undefined : JSON.stringify(state ?? {error: 'No five-sector snapshot is available.'}));
       return;
     }

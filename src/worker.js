@@ -11,13 +11,21 @@ export default {
     }
     const asset = siteAssets[path === '/index.html' ? '/' : path];
     if (!asset || !Object.hasOwn(asset, 'body')) return new Response('Not found', {status:404});
+    const headers = {
+      'Content-Type':asset.type, 'Cache-Control':asset.etag ? 'private, no-cache' : 'private, no-store',
+      'Referrer-Policy':'no-referrer', 'X-Content-Type-Options':'nosniff'
+    };
+    if (asset.etag) {
+      headers.ETag = asset.etag;
+      const validators = (request.headers.get('If-None-Match') || '').split(',');
+      if (validators.some(value => value.trim() === '*' || value.trim().replace(/^W\//, '') === asset.etag)) {
+        return new Response(null, {status:304, headers});
+      }
+    }
     let body = null;
     if (request.method !== 'HEAD') {
       body = asset.binary ? Uint8Array.from(atob(asset.body), c => c.charCodeAt(0)) : asset.body;
     }
-    return new Response(body, {headers:{
-      'Content-Type':asset.type, 'Cache-Control':'private, no-cache',
-      'Referrer-Policy':'no-referrer', 'X-Content-Type-Options':'nosniff'
-    }});
+    return new Response(body, {headers});
   }
 };

@@ -1,6 +1,6 @@
 # Orbital
 
-Orbital is an interactive station for coordinating project agents. Select a room to inspect its assignment, or open the central hub to see the full roster. Directory and Briefings share the same city backdrop.
+Orbital is an interactive station for coordinating project agents. Each reported worker has a room on a project floor. Select a room to see its latest activity. The owner workspace includes History, Roadmap and a numbered Needs Brian list. Open a decision to see its project, evidence and requested action. Visitors see the public sector summaries.
 
 ## Run locally
 
@@ -13,3 +13,7 @@ Use Node.js 22.16 or later. Run `npm start` and open the loopback address printe
 - `npm run build` builds the Worker with example data. For your own deployment, supply your hosting manifest through `ORBIT_HOSTING_MANIFEST`.
 
 The published owner workspace keeps its operational feed, coordinator link, and desktop exports private. This repository ships representative station data in `examples/station.json`.
+
+## Releases
+
+Station updates publish automatically. Each published version is mirrored here. The release commit records the Sites version and hosted source commit. Public examples and deployment templates stay independent of the owner workspace.

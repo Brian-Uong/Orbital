@@ -8,8 +8,8 @@ if (!statePath || !outputPath || process.argv.length>5) {
   process.exit(1);
 }
 const publicRoot=fileURLToPath(new URL('../public/',import.meta.url));
-const [html,css,app,station,snapshot,desktop] = await Promise.all([
-  ...['index.html','style.css','app.js','station.js'].map(name=>readFile(resolve(publicRoot,name),'utf8')),
+const [html,css,app,roster,tower,skip,workspace,snapshot,desktop] = await Promise.all([
+  ...['index.html','style.css','app.js','roster.js','tower.js','skip.js','workspace.js'].map(name=>readFile(resolve(publicRoot,name),'utf8')),
   readFile(resolve(statePath),'utf8'),
   desktopPath ? readFile(resolve(desktopPath)) : null
 ]);
@@ -19,12 +19,25 @@ if (!Array.isArray(data.agents) || !Array.isArray(data.events) || !Number.isFini
 }
 // JSON in an HTML raw text element must never contain an opening tag.
 const safeJson=JSON.stringify(data).replace(/</g,'\\u003c').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029');
-const importLine="import { mountStation } from './station.js';";
-const exported='export function mountStation(';
-if (!app.includes(importLine) || !station.includes(exported)) throw new Error('The station module entry point changed. Update the standalone bundler.');
-const scene=station.replace(exported,'function mountStation(');
-// A private lexical scope keeps the pixel renderer and dashboard palettes independent.
-const javascript='(() => {\n"use strict";\nconst mountStation = (() => {\n'+scene+'\nreturn mountStation;\n})();\n'+app.replace(importLine,'')+'\n})();';
+// Inline the station's named ES modules in dependency order. Separate lexical
+// scopes keep the offline app identical to the hosted modules without networking.
+function inlineModule(source) {
+  return source.replace(/^import\s*\{([^}]+)\}\s*from\s*['"]\.\/(roster|tower|skip|workspace)\.js['"];?/gm,
+    (_, names, module) => 'const {'+names+'} = modules.'+module+';');
+}
+function defineModule(name, source) {
+  const exports=[];
+  const body=inlineModule(source).replace(/^export (function|const) (\w+)/gm, (_,type,id)=>{
+    exports.push(id);
+    return type+' '+id;
+  });
+  if (!exports.length) throw new Error('Expected named exports in '+name);
+  return 'modules.'+name+' = (() => {\n'+body+'\nreturn {'+exports.join(',')+'};\n})();';
+}
+const javascript=[
+  '(() => {\n"use strict";\nconst modules = {};',
+  defineModule('roster',roster), defineModule('tower',tower), defineModule('skip',skip), defineModule('workspace',workspace), inlineModule(app), '})();'
+].join('\n');
 const marker='<script id="orbital-snapshot" type="application/json">'+safeJson+'</script>';
 const archive=desktop ? '\n<script type="application/octet-stream" id="orbital-desktop">'+desktop.toString('base64')+'</script>' : '';
 function replaceRequired(source,needle,replacement) {
@@ -32,13 +45,17 @@ function replaceRequired(source,needle,replacement) {
   return source.replace(needle,()=>replacement);
 }
 let output=replaceRequired(html,'<link rel="stylesheet" href="/style.css">','<style>\n'+css+'\n</style>');
-const iconBytes=(await readFile(resolve(publicRoot,'orbit-v2.png'))).toString('base64');
-for (const [file,type] of [['favicon.ico','image/x-icon'],['orbit-v2.png','image/png']]) {
-  output=replaceRequired(output,'href="/'+file+'"','href="data:'+type+';base64,'+(await readFile(resolve(publicRoot,file))).toString('base64')+'"');
+// Inline local artwork wherever the hosted HTML and stylesheet reference it.
+for (const [file,type] of [
+  ['favicon.ico','image/x-icon'],['orbit-v2.png','image/png'],
+  ['orbital-city.webp','image/webp'],['orbital-floor.webp','image/webp'],
+  ['tower-street.svg','image/svg+xml']
+]) {
+  if (!output.includes('/'+file)) continue;
+  const bytes=await readFile(resolve(publicRoot,file));
+  const uri='data:'+type+';base64,'+bytes.toString('base64');
+  output=output.replaceAll('/'+file,()=>uri);
 }
-output=output.replace('url(/orbit-v2.png)',()=> 'url(data:image/png;base64,'+iconBytes+')');
-const city=(await readFile(resolve(publicRoot,'orbital-city.webp'))).toString('base64');
-output=replaceRequired(output,'url(/orbital-city.webp)','url(data:image/webp;base64,'+city+')');
 output=replaceRequired(output,'<script type="module" src="/app.js"></script>','');
 const policy="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; connect-src 'none'; base-uri 'none'; form-action 'none'\">";
 output=replaceRequired(output,'<meta charset="utf-8">','<meta charset="utf-8">\n  '+policy);
