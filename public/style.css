@@ -582,3 +582,14 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .release-group{margin:1.7rem 0 2.3rem}.release-group>header{display:flex;gap:.75rem;align-items:center}.release-group h2{margin:0;font-size:1.25rem}.release-count{border:1px solid var(--line);border-radius:999px;padding:.15rem .6rem;font-size:.9rem}.release-help{font-size:.9rem;color:var(--muted);line-height:1.55;max-width:80ch}
 .release-list{display:grid;gap:.65rem}.release-item{border:1px solid var(--line);border-radius:12px;overflow:hidden}.release-item>summary{cursor:pointer;display:flex;gap:1rem;align-items:start;justify-content:space-between;padding:1rem 1.2rem;list-style:revert;line-height:1.5}.release-item>summary span{font-weight:600;overflow-wrap:anywhere}.release-item>summary small{font-size:.875rem;color:var(--muted);flex-shrink:0}.release-card{border:0!important;border-radius:0!important;margin:0!important;background:rgba(17,38,55,.35);padding:1.2rem}.release-card h3{font-size:1.05rem}.release-state{font-weight:600}.release-state-blocked{color:#f3d096}.release-state-queued,.release-state-publishing{color:#bfd6f3}.release-state-published{color:#aee5ce}.release-project{color:var(--muted);font-size:.875rem}.repair-actions{margin-top:1.2rem}.repair-actions button{min-height:44px;font:inherit;padding:.65rem 1rem}.repair-actions .review-deny{border-color:#c7867c;color:#ffc6bf}
 @media(max-width:600px){.release-item>summary{flex-direction:column;gap:.25rem}.release-item>summary small{flex-shrink:1}.release-card{padding:1rem}}
+
+
+/* Independent Roadmap sector controls */
+.sector-heading{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.sector-heading h2{margin:0;min-width:0;overflow-wrap:anywhere}
+.sector-control{display:flex;align-items:center;gap:.8rem;flex-wrap:wrap}
+.sector-control button{min-height:44px;padding:.65rem 1rem;white-space:nowrap}
+.sector-status{font-size:.9rem;color:var(--muted,#b9cbd7)}
+.sector-status.is-paused{color:#eed49b}
+.sector-control-note{color:var(--muted,#b9cbd7);font-size:.9rem;line-height:1.6;margin:.8rem 0 1.5rem;max-width:65ch}
+@media(max-width:600px){.sector-control{width:100%;justify-content:space-between}.sector-heading{align-items:flex-start}}

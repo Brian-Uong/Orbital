@@ -213,8 +213,14 @@ function skipControls(plans, allowSkip) {
     '<button class="thread" type="button" data-skip-picker>Skip selected item</button></div></section>';
 }
 
-function roadmapCard(sector, items) {
-  return '<article class="panel workspace-card"><h2>' + esc(sector.name) + '</h2><div class="workspace-lanes">' +
+function roadmapCard(sector, items, snapshot, editable) {
+  const paused=snapshot.commandCenter?.sectorControls?.[sector.id]?.paused===true;
+  const globalPaused=snapshot.commandCenter?.workflowControl?.paused===true;
+  const label=paused?'Sector paused':globalPaused?'Paused by global control':'Ready for hourly work';
+  const controls='<div class="sector-control"><span class="sector-status'+(paused||globalPaused?' is-paused':'')+'">'+label+'</span>'+
+    (editable?'<button type="button" data-sector-control="'+esc(sector.id)+'" data-paused="'+paused+'" aria-label="'+(paused?'Resume ':'Pause ')+esc(sector.name)+'">'+(paused?'Resume sector':'Pause sector')+'</button>':'')+'</div>';
+  const note=paused?'Queued work stays here. Active work stops at its next safe checkpoint.':globalPaused?'This sector is enabled, but global Pause holds its work.':'Work is picked up on the next hourly check.';
+  return '<article class="panel workspace-card"><div class="sector-heading"><h2>' + esc(sector.name) + '</h2>'+controls+'</div><p class="sector-control-note">'+note+'</p><div class="workspace-lanes">' +
     ['Current','Next','Waiting'].map(lane => '<section><h3>' + lane + '</h3>' + (items.filter(i => i.lane === lane).map(planEntry).join('') || empty('None recorded.')) + '</section>').join('') + '</div></article>';
 }
 function waitingExplanation({row,reason}) {
@@ -438,7 +444,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
           item.skippable = item.lane === 'Next' && canSkip(snapshot,item.sector,item.row);
         }
       }
-      roadmapHtml = skipControls(plans,allowSkip) + '<div class="workspace-timeline">' + sectors.map((a,i) => roadmapCard(a,plans[i])).join('') + '</div>';
+      roadmapHtml = skipControls(plans,allowSkip) + '<div class="workspace-timeline">' + sectors.map((a,i) => roadmapCard(a,plans[i],snapshot,allowSkip)).join('') + '</div>';
       return roadmapHtml;
     },
     get decisions() {
@@ -468,6 +474,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
+
 
 
 

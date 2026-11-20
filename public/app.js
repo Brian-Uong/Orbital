@@ -296,6 +296,7 @@ function showAccess(mode) {
   document.body.dataset.access=owner?'owner':'public';
   if(wasPrivate && !owner){
     $('skipStatus').textContent='';
+    $('sectorControlStatus').textContent='';
     if(location.hash.includes('/office/') || ownerPages.includes(location.hash.slice(1).split('/')[0]))history.replaceState(null,'','#overview');
     Object.assign(state,{agents:[],events:[],reports:[],center:{},floors:[],workerHandles:new Set(),snapshot:null,id:null,at:null});
     lastText='';validator='';station.update([],null,false);
@@ -460,6 +461,33 @@ $('reviewEditForm').addEventListener('submit',async event=>{
   if(await saveReviewDecision(editingReview,'revise',{editedOutput,instructions}))closeReviewEditor();
 });
 
+let savingSector=false;
+$('roadmapBody').addEventListener('click',async event=>{
+  const button=event.target.closest('button[data-sector-control]');
+  if(!button || savingSector || embedded || state.access!=='owner')return;
+  const sectorId=button.dataset.sectorControl, paused=button.dataset.paused!=='true';
+  const notice=$('sectorControlStatus');
+  savingSector=true;button.disabled=true;notice.textContent='Saving sector setting.';
+  async function readOwner(){
+    const read=await fetch('/api/state',{cache:'no-store',redirect:'error',credentials:'same-origin'});
+    if(!read.ok || read.headers.get('Orbit-Access')!=='owner' || state.access!=='owner')throw Error('Owner sign-in is required.');
+    const data=await read.json();
+    return {data,tag:read.headers.get('ETag') || ''};
+  }
+  try{
+    const current=await readOwner();
+    const sector=current.data.agents.find(a=>a.id===sectorId);
+    if(!sector)throw Error('This sector is no longer available. Refresh Roadmap.');
+    const response=await fetch('/api/sector-control',{method:'POST',redirect:'error',credentials:'same-origin',headers:{'Content-Type':'application/json','If-Match':current.tag},body:JSON.stringify({sectorId,paused})});
+    const result=await response.json();if(!response.ok)throw Error(result.error || 'Could not save the sector setting.');
+    const saved=await readOwner();
+    if((saved.data.commandCenter.sectorControls?.[sectorId]?.paused===true)!==paused)throw Error('The setting changed again. Refresh to see its current state.');
+    validator='';apply(JSON.stringify(saved.data));
+    notice.textContent=sector.name+(paused?' paused. Active work stops at its next safe checkpoint.':saved.data.commandCenter.workflowControl?.paused?' enabled. Global Pause still holds its work.':' resumed. Work continues on the next hourly check.');
+    document.querySelectorAll('button[data-sector-control]').forEach(el=>{if(el.dataset.sectorControl===sectorId)el.focus();});
+  }catch(error){notice.textContent=error.message;}finally{savingSector=false;button.disabled=false;}
+});
+
 let savingSkip=false;
 $('roadmapBody').addEventListener('click', async event => {
   const button=event.target.closest('button[data-skip-tag], button[data-skip-picker]');
@@ -534,6 +562,7 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
+
 
 
 

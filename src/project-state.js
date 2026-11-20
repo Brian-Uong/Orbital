@@ -176,6 +176,7 @@ function preserveDecisions(current, incoming, service) {
       }
       if (!next?.claimId || (previous?.claimId === next.claimId && previous?.tag === next.tag)) continue;
       if (!service) throw new ApiError(403,'Only the runner may reserve planned work.');
+      if (current.commandCenter.workflowControl?.paused || current.commandCenter.sectorControls?.[sector.id]?.paused) conflict('This sector is paused. Keep its planned work queued.');
       if (!previous || previous.tag !== next.tag || previous.task !== next.task ||
           !canSkip(current, prior, previous)) conflict('Reservation requires the same eligible planned item.');
     }
@@ -184,9 +185,10 @@ function preserveDecisions(current, incoming, service) {
 
 export async function handleProjectState(request, env, seed) {
   try {
+    const sectorRoute = new URL(request.url).pathname === '/api/sector-control';
     const controlRoute = new URL(request.url).pathname === '/api/workflow-control';
     const responseRoute = new URL(request.url).pathname === '/api/release-response';
-    const approvalRoute = responseRoute || controlRoute || new URL(request.url).pathname === '/api/release-approval';
+    const approvalRoute = sectorRoute || responseRoute || controlRoute || new URL(request.url).pathname === '/api/release-approval';
     const read = !approvalRoute && (request.method === 'GET' || request.method === 'HEAD');
     if ((!approvalRoute && !read && request.method !== 'PUT') || (approvalRoute && request.method !== 'POST')) {
       const response = json({error:'Use GET, HEAD or PUT.'}, 405);
@@ -219,6 +221,17 @@ export async function handleProjectState(request, env, seed) {
       const result = await conditionalUpdate(env.BUCKET, SECTOR_KEY, old => {
         const current = newer(old,seed);
         const ledger = current.commandCenter.execution || {};
+        if (sectorRoute) {
+          if (!projectId(intent.sectorId) || !current.agents.some(a=>a.id===intent.sectorId && a.sourceType==='sector')) throw new ApiError(400,'Choose an existing sector.');
+          if (typeof intent.paused !== 'boolean') throw new ApiError(400,'Choose pause or resume.');
+          const controls=current.commandCenter.sectorControls || {};
+          const control=controls[intent.sectorId];
+          if ((control?.paused===true)===intent.paused) return {result:{sectorId:intent.sectorId,paused:intent.paused,applied:false}};
+          if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The station changed. Refresh and try again.');
+          const at=new Date(Math.max(Date.now(),Date.parse(current.updatedAt)+1)).toISOString();
+          const next={paused:intent.paused,updatedAt:at,source:'Owner Roadmap'};
+          return {record:{...current,updatedAt:at,commandCenter:{...current.commandCenter,sectorControls:{...controls,[intent.sectorId]:next}}},result:{sectorId:intent.sectorId,...next,applied:true}};
+        }
         if (controlRoute) {
           if (typeof intent.paused !== 'boolean') throw new ApiError(400,'Choose pause or resume.');
           const control = current.commandCenter.workflowControl;
@@ -284,6 +297,9 @@ export async function handleProjectState(request, env, seed) {
       if (JSON.stringify(current.commandCenter.workflowControl) !== JSON.stringify(incoming.commandCenter.workflowControl)) {
         throw new ApiError(409,'Preserve the owner workflow setting. Use Pause or Resume to change it.');
       }
+      if (JSON.stringify(current.commandCenter.sectorControls || {}) !== JSON.stringify(incoming.commandCenter.sectorControls || {})) {
+        throw new ApiError(409,'Preserve the owner sector settings. Use Roadmap Pause or Resume to change them.');
+      }
       const approvals = current.commandCenter.execution?.ownerApprovals || [];
       const proposed = incoming.commandCenter.execution?.ownerApprovals || [];
       if (JSON.stringify(approvals) !== JSON.stringify(proposed)) throw new ApiError(409,'Preserve every owner approval. Use the approval action for new decisions.');
@@ -307,6 +323,17 @@ export async function handleProjectState(request, env, seed) {
         }
       }
       for (const row of reviews) {
+        const prior=current.commandCenter.execution?.releaseReviews?.find(r=>r.id===row.id);
+        const newClaim=['releaseClaimId','revisionClaimId'].some(key=>row[key] && row[key]!==prior?.[key]);
+        if (newClaim) {
+          const sector=current.agents.find(a=>a.id===(row.projectId || row.project) || a.name===row.project);
+          if (current.commandCenter.workflowControl?.paused || (sector && current.commandCenter.sectorControls?.[sector.id]?.paused)) {
+            throw new ApiError(409,'Work is paused. Keep this release or revision queued.');
+          }
+          if (Object.values(current.commandCenter.sectorControls || {}).some(c=>c.paused) && !sector) {
+            throw new ApiError(409,'Identify the exact sector before reserving this release or revision.');
+          }
+        }
         if (row.approvalId && !approvals.some(a=>a.id===row.approvalId && a.reviewId===row.id)) {
           throw new ApiError(409,'Every approval must belong to this exact review.');
         }
@@ -336,6 +363,7 @@ export async function handleProjectState(request, env, seed) {
       error instanceof ApiError ? error.status : 503);
   }
 }
+
 
 
 
