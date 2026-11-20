@@ -2,7 +2,7 @@
 export default {
   async fetch(request, env) {
     const path = new URL(request.url).pathname;
-    if (path === '/api/state') return handleProjectState(request, env, sectorSeed);
+    if (path === '/api/state' || path === '/api/release-approval' || path === '/api/workflow-control') return handleProjectState(request, env, sectorSeed);
     if (path.startsWith('/api/')) return handleApi(request, env);
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response('Method not allowed', {status:405});
     if (path === '/sync-guide' && !isStationOwner(request, env) &&
@@ -29,3 +29,4 @@ export default {
     return new Response(body, {headers});
   }
 };
+

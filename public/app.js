@@ -207,6 +207,11 @@ function renderDisclosures(panel,html,keyAttribute,heading) {
 function renderWorkViews(view) {
   const owner=privateView();
   $('waitPanel').hidden=!owner;
+  $('workflowControls').hidden=!owner || !!embedded;
+  const paused=state.snapshot?.commandCenter.workflowControl?.paused === true;
+  $('workflowState').textContent=paused?'Workflow paused':'Workflow running';
+  $('pauseWorkflow').disabled=paused || state.access!=='owner';
+  $('resumeWorkflow').disabled=!paused || state.access!=='owner';
   for(const el of document.querySelectorAll('[data-private-nav]'))el.hidden=!owner;
   const destinations={history:'historyBody',needs:'needsBody',roadmap:'roadmapBody',overview:'waitingBody'};
   if(!owner || !state.snapshot){
@@ -372,6 +377,47 @@ document.addEventListener('click',e=>{const target=e.target.closest('[data-agent
   const a=state.agents.find(a=>a.id===target.dataset.download);if(a?.artifact && typeof a.artifact.text==='string')saveBlob(new Blob([a.artifact.text],{type:'application/octet-stream'}),String(a.artifact.name||'Deliverable.txt').split(/[\\/]/).pop());
 }});
 
+let savingWorkflow=false;
+async function controlWorkflow(paused){
+  if(savingWorkflow || embedded || state.access!=='owner')return;
+  savingWorkflow=true;const notice=$('workflowNotice');notice.textContent='Saving workflow setting…';
+  try{
+    const read=await fetch('/api/state',{cache:'no-store',redirect:'error',credentials:'same-origin'});
+    if(!read.ok || read.headers.get('Orbit-Access')!=='owner')throw Error('Owner sign-in is required.');
+    const response=await fetch('/api/workflow-control',{method:'POST',redirect:'error',credentials:'same-origin',headers:{'Content-Type':'application/json','If-Match':read.headers.get('ETag') || ''},body:JSON.stringify({paused})});
+    const result=await response.json();if(!response.ok)throw Error(result.error || 'Could not save the workflow setting.');
+    validator='';await refresh();
+    if(state.snapshot?.commandCenter.workflowControl?.paused!==paused)throw Error('Refresh to verify the saved setting.');
+    notice.textContent=paused?'Paused. Active work stops at its next checkpoint.':'Resumed. Work continues on the next hourly check.';
+  }catch(error){notice.textContent=error.message;}finally{savingWorkflow=false;}
+}
+$('pauseWorkflow').onclick=()=>controlWorkflow(true);
+$('resumeWorkflow').onclick=()=>controlWorkflow(false);
+let savingApproval=false;
+$('needsBody').addEventListener('click',async event=>{
+  const button=event.target.closest('[data-approve-review]');
+  if (!button || savingApproval || embedded || state.access!=='owner') return;
+  const review=state.snapshot?.commandCenter.execution?.releaseReviews?.find(r=>r.id===button.dataset.approveReview);
+  if (!review || !window.confirm('Approve this change and queue its push?\n\n'+review.title+'\n'+review.action+'\nDestination: '+review.destination)) return;
+  savingApproval=true;button.disabled=true;
+  const notice=$('approvalStatus');notice.textContent='Recording approval…';
+  try {
+    const read=await fetch('/api/state',{cache:'no-store',redirect:'error',credentials:'same-origin'});
+    if (!read.ok || read.headers.get('Orbit-Access')!=='owner') throw Error('Sign in as the owner and try again.');
+    const current=await read.json();
+    const fresh=current.commandCenter.execution?.releaseReviews?.find(r=>r.id===review.id);
+    if(JSON.stringify(fresh)!==JSON.stringify(review)) throw Error('This review changed. Refresh and review the latest version.');
+    const saved=await fetch('/api/release-approval',{method:'POST',credentials:'same-origin',redirect:'error',
+      headers:{'Content-Type':'application/json','If-Match':read.headers.get('ETag') || ''},
+      body:JSON.stringify({reviewId:review.id,expectedReview:JSON.stringify(review)})});
+    const result=await saved.json();if(!saved.ok)throw Error(result.error || 'Approval could not be saved.');
+    validator='';await refresh();
+    if(!state.snapshot.commandCenter.execution?.ownerApprovals?.some(a=>a.id===result.approvalId))throw Error('Refresh to confirm whether approval was saved.');
+    notice.textContent='Approved and queued. The next hourly check will validate and push this change.';
+  } catch(error){notice.textContent=error.message;}
+  finally {savingApproval=false;button.disabled=false;}
+});
+
 let savingSkip=false;
 $('roadmapBody').addEventListener('click', async event => {
   const button=event.target.closest('button[data-skip-tag], button[data-skip-picker]');
@@ -446,3 +492,4 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
+

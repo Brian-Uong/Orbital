@@ -546,3 +546,11 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
   .skip-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
   .skip-controls button { justify-self: start; }
 }
+
+
+.approval-actions{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line)}
+.approval-actions button{min-height:44px;padding:.65rem 1rem;font-size:1rem;background:#b3f1e2;color:#173444}
+.approval-actions p{max-width:65ch;color:var(--muted);font-size:.875rem;line-height:1.5}
+.release-progress{margin-top:2rem}.release-progress ul{list-style:none;padding:0}.release-progress li{padding:1rem;margin:.75rem 0;border:1px solid var(--line);border-radius:12px;overflow-wrap:anywhere}.release-progress h3{margin:0}.release-progress p{line-height:1.5}
+
+.workflow-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1.2rem;margin-top:1rem;background:#1d3449;border:1px solid var(--line);border-radius:14px}.workflow-controls p{margin:.3rem 0;color:var(--muted);max-width:65ch}.workflow-buttons{display:flex;gap:.75rem;flex-wrap:wrap}.workflow-buttons button{min-height:44px;font-size:.95rem}.workflow-controls [role=status]:not(:empty){flex-basis:100%}

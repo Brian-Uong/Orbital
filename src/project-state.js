@@ -184,8 +184,10 @@ function preserveDecisions(current, incoming, service) {
 
 export async function handleProjectState(request, env, seed) {
   try {
-    const read = request.method === 'GET' || request.method === 'HEAD';
-    if (!read && request.method !== 'PUT') {
+    const controlRoute = new URL(request.url).pathname === '/api/workflow-control';
+    const approvalRoute = controlRoute || new URL(request.url).pathname === '/api/release-approval';
+    const read = !approvalRoute && (request.method === 'GET' || request.method === 'HEAD');
+    if ((!approvalRoute && !read && request.method !== 'PUT') || (approvalRoute && request.method !== 'POST')) {
       const response = json({error:'Use GET, HEAD or PUT.'}, 405);
       response.headers.set('Allow', 'GET, HEAD, PUT');
       return response;
@@ -210,6 +212,38 @@ export async function handleProjectState(request, env, seed) {
     }
     const expected = request.headers.get('if-match')?.replace(/^W\//, '');
     if (!expected) throw new ApiError(428, 'Read the current state and send its ETag with If-Match.');
+    if (approvalRoute) {
+      if (!ownerBrowser) throw new ApiError(403,'Sign in as the owner to approve a release.');
+      const intent = await bodyOf(request, 512 * 1024);
+      const result = await conditionalUpdate(env.BUCKET, SECTOR_KEY, old => {
+        const current = newer(old,seed);
+        const ledger = current.commandCenter.execution || {};
+        if (controlRoute) {
+          if (typeof intent.paused !== 'boolean') throw new ApiError(400,'Choose pause or resume.');
+          const control = current.commandCenter.workflowControl;
+          if (control?.paused === intent.paused) return {result:{paused:control.paused,updatedAt:control.updatedAt}};
+          if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The workflow changed. Refresh and try again.');
+          const at = new Date(Math.max(Date.now(),Date.parse(current.updatedAt)+1)).toISOString();
+          const next = {paused:intent.paused,updatedAt:at,source:'Owner Command'};
+          return {record:{...current,updatedAt:at,commandCenter:{...current.commandCenter,workflowControl:next}},result:next};
+        }
+        const prior = (ledger.ownerApprovals || []).find(a => a.reviewId === intent.reviewId && JSON.stringify(a.review) === intent.expectedReview);
+        if (prior) return {result:{approvalId:prior.id,applied:false}};
+        if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
+        const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
+        if (!review || JSON.stringify(review) !== intent.expectedReview || !review.action || !review.destination ||
+            !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review'].includes(review.status)) {
+          throw new ApiError(409,'This release is no longer awaiting your approval.');
+        }
+        const at = new Date(Math.max(Date.now(),Date.parse(current.updatedAt)+1)).toISOString();
+        const receipt = {id:'owner-approval/'+review.id+'/'+at,reviewId:review.id,at,source:'Owner Needs Brian',review:structuredClone(review)};
+        const entry = {...review,status:'approved queued',approvalId:receipt.id,releaseProgress:'Queued for the next hourly coordinator check.'};
+        const record = {...current,updatedAt:at,commandCenter:{...current.commandCenter,execution:{...ledger,
+          ownerApprovals:[...(ledger.ownerApprovals || []),receipt],releaseReviews:ledger.releaseReviews.map(r=>r===review?entry:r)}}};
+        return {record,result:{approvalId:receipt.id,applied:true}};
+      });
+      return json(result);
+    }
     const incoming = validateProjectSnapshot(await bodyOf(request, 8 * 1024 * 1024));
     const acknowledgement = await conditionalUpdate(env.BUCKET, SECTOR_KEY, old => {
       const current = newer(old, seed);
@@ -223,6 +257,20 @@ export async function handleProjectState(request, env, seed) {
         throw new ApiError(409, 'Snapshot is older than, or conflicts with, the current revision.');
       }
       preserveDecisions(current, incoming, service);
+      if (JSON.stringify(current.commandCenter.workflowControl) !== JSON.stringify(incoming.commandCenter.workflowControl)) {
+        throw new ApiError(409,'Preserve the owner workflow setting. Use Pause or Resume to change it.');
+      }
+      const approvals = current.commandCenter.execution?.ownerApprovals || [];
+      const proposed = incoming.commandCenter.execution?.ownerApprovals || [];
+      if (JSON.stringify(approvals) !== JSON.stringify(proposed)) throw new ApiError(409,'Preserve every owner approval. Use the approval action for new decisions.');
+      if (!service && JSON.stringify(current.commandCenter.execution?.releaseReviews) !== JSON.stringify(incoming.commandCenter.execution?.releaseReviews)) {
+        throw new ApiError(403,'Use the release approval action.');
+      }
+      for (const receipt of approvals) {
+        const before = current.commandCenter.execution.releaseReviews?.find(r=>r.id===receipt.reviewId);
+        const after = incoming.commandCenter.execution?.releaseReviews?.find(r=>r.id===receipt.reviewId);
+        if (before?.approvalId===receipt.id && after?.approvalId!==receipt.id) throw new ApiError(409,'Keep approved releases and their receipt references.');
+      }
       const previousEvents = current.commandCenter.execution?.workerEvents ?? [];
       if (previousEvents.length) {
         const nextEvents = new Map((incoming.commandCenter.execution?.workerEvents ?? [])
@@ -241,3 +289,4 @@ export async function handleProjectState(request, env, seed) {
       error instanceof ApiError ? error.status : 503);
   }
 }
+
