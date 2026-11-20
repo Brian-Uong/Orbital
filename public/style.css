@@ -355,7 +355,6 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .bay-nav {display:flex;align-items:center;justify-content:center;gap:5px;padding:2px 0 4px}
 .bay-nav button {font:600 1.05rem/1 var(--body);min-width:29px;min-height:27px;padding:0;color:#eef5f2;background:#334959;border:1px solid #91a2a6;border-radius:4px}
 .bay-nav button:disabled {opacity:.4}
-.handle-prefix {color:#acc1cb;font-weight:400}.short-handles .handle-prefix {display:none}
 .tower-display {font:500 .8rem/1.4 var(--body);text-align:right;color:#d9ede8}
 .tower-display summary {cursor:pointer;min-height:26px;padding:4px 6px}
 .tower-display>div {display:flex;align-items:center;flex-wrap:wrap;justify-content:end;gap:8px 13px;padding:5px}

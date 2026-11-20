@@ -32,7 +32,7 @@ test('sector history keeps distinct revisions, limits scope, and suppresses dupl
   assert.doesNotMatch(result.history,/Other sector output|A planned project/);
   assert.equal(result.history.split('First version checked.').length,2);
   assert.ok(result.history.indexOf('Adjusted counts checked.')<result.history.indexOf('First version checked.'));
-  for(const value of ['Prepare the synthetic trial report.', '/root/sample_lead', '/root/sample_check',
+  for(const value of ['Prepare the synthetic trial report.', '<strong>sample_lead</strong>', '<strong>sample_check</strong>',
       'Recounted both samples.', 'Both trial counts agree.', 'Only synthetic trials.', link('current'), link('older')]){
     assert.ok(result.history.includes(value),value);
   }

@@ -1,4 +1,5 @@
 import { canSkip, skipSlots } from './skip.js';
+import { workerName, workerMentions } from './worker-roster.js';
 // Read-only projections of the owner snapshot. Only recorded, displayable fields cross into markup.
 const list = value => Array.isArray(value) ? value.filter(item => item && typeof item === 'object') : [];
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -54,7 +55,7 @@ function credits(row) {
     const note = person.contribution && person.contribution !== row.summary ? '<span> '+ esc(person.contribution) + '</span>' : '';
     const url = safeLink(person.artifactUrl);
     const result = url && url !== safeLink(row.artifactUrl || row.reviewUrl) ? ' ' + artifactLink(url,'Contribution') : '';
-    return '<li><strong>' + esc(id) + '</strong>' + (id === row.executorId ? ' · Lead' : '') + note + result + '</li>';
+    return '<li><strong>' + esc(workerName(id)) + '</strong>' + (id === row.executorId ? ' · Lead' : '') + note + result + '</li>';
   }).join('') + '</ul>';
 }
 function historyRows(sector, records) {
@@ -71,6 +72,15 @@ function historyRows(sector, records) {
     if (!unique.has(key)) unique.set(key, row);
   }
   return [...unique.values()];
+}
+function historyDisplay(row) {
+  const handles = new Set([row.executorId,...list(row.executors).map(person=>person.id || person.executorId)].filter(Boolean));
+  const display = {...row};
+  for (const field of ['summary','evidence','intendedOutcome','assignmentSummary','test','acceptanceTest','constraints','limitations','specialistName','source']) {
+    if (typeof row[field]==='string') display[field]=workerMentions(row[field],handles);
+  }
+  display.executors=list(row.executors).map(person=>({...person,contribution:workerMentions(person.contribution,handles)}));
+  return display;
 }
 function revision(row) {
   const status = row.verificationOnly ? 'Verification' : text(row.status);
@@ -308,7 +318,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     get history() {
       if (historyHtml !== undefined) return historyHtml;
       const records = list(snapshot?.commandCenter?.execution?.workRuns);
-      const rowsFor = sector => historyRows(sector,records).filter(row => activeKind === 'all' || kindOf(row) === activeKind);
+      const rowsFor = sector => historyRows(sector,records).filter(row => activeKind === 'all' || kindOf(row) === activeKind).map(historyDisplay);
       const selected = sectors.find(sector => sector.id === sectorId);
       historyHtml = selected ? sectorHistory(selected,rowsFor(selected)) :
         '<div class="workspace-grid">' + sectors.map(sector => historyCard(sector,rowsFor(sector))).join('') + '</div>';

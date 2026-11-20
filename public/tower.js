@@ -1,3 +1,4 @@
+import { workerName, workerMentions } from './worker-roster.js';
 const by = id => document.getElementById(id);
 const safe = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const floorPaint = ['#b2dacd','#e8c499','#a3cdde','#c4b6dc','#a7d3bc'];
@@ -99,7 +100,7 @@ export function renderOfficeScene(worker) {
 
 function room(worker) {
   return '<button type="button" class="office-room" data-worker="'+safe(worker.id)+'" data-active="'+Boolean(worker.active)+'" aria-haspopup="dialog" aria-label="'+safe(worker.name+' · '+statusLabel(worker)+' · '+worker.projectName)+'">'+renderOfficeScene(worker)+
-    '<span class="office-plaque"><strong>'+(worker.name.startsWith('/root/')?'<span class="handle-prefix">/root/</span>'+safe(worker.name.slice(6)):safe(worker.name))+'</strong><span class="office-state">'+safe(statusLabel(worker))+'</span></span></button>';
+    '<span class="office-plaque"><strong>'+safe(worker.name)+'</strong><span class="office-state">'+safe(statusLabel(worker))+'</span></span></button>';
 }
 function textIfChanged(node, text) {
   if (node.textContent !== text) node.textContent = text;
@@ -150,7 +151,7 @@ function reconcileFloor(view, floor, level, color, privateView) {
       view.nav?.remove();
       view.nav = null;
     }
-    textIfChanged(view.facade.lastElementChild,privateView?'No recorded workers':floor.status||'Status unavailable');
+    textIfChanged(view.facade.lastElementChild,privateView?(floor.allWorkers?.length?'No current workers':'No recorded workers'):floor.status||'Status unavailable');
     return false;
   }
 
@@ -187,7 +188,8 @@ function reconcileFloor(view, floor, level, color, privateView) {
       view.rooms.set(worker.id,cached);
     } else {
       if (worker.active!==cached.worker.active) cached.el.dataset.active = String(Boolean(worker.active));
-      if (worker.active!==cached.worker.active || worker.status!==cached.worker.status || renamed) {
+      if (worker.name!==cached.worker.name) textIfChanged(cached.el.querySelector('.office-plaque strong'),worker.name);
+      if (worker.active!==cached.worker.active || worker.status!==cached.worker.status || worker.name!==cached.worker.name || renamed) {
         const label = statusLabel(worker);
         textIfChanged(cached.status,label);
         cached.el.setAttribute('aria-label',worker.name+' · '+label+' · '+floor.name);
@@ -210,6 +212,10 @@ function reconcileFloor(view, floor, level, color, privateView) {
   return layoutChanged;
 }
 
+export function officeByHandle(floor,handle) {
+  return floor?.workers.find(worker=>worker.handle===handle) || floor?.allWorkers?.find(worker=>worker.handle===handle);
+}
+
 export function mountTower({selectProject,dateText,onRouteChange}) {
   const root=by('officeTower'),dialog=by('officeDialog'),scene=by('towerSite');
   let floors=[],current=null,project=null,focus=false,privateView=false;
@@ -221,7 +227,13 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     const view=views.get(event.target.closest?.('[data-floor]')?.dataset.floor);
     if(view)updateNav(view);
   },true);
-  function floorForOffice() {return floors.find(f=>f.workers.some(w=>w.id===current));}
+  function officeById(floor,id) {
+    return floor?.workers.find(worker=>worker.id===id) || floor?.allWorkers?.find(worker=>worker.id===id);
+  }
+  function floorForOffice() {return floors.find(floor=>officeById(floor,current));}
+  function navigationWorkers(floor) {
+    return floor.workers.some(worker=>worker.id===current) ? floor.workers : floor.allWorkers || floor.workers;
+  }
   function draw() {
     const activeElement=document.activeElement;
     const resized=[];
@@ -260,7 +272,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     for(const id of ['officeTitle','officeProject','officeDetail'])by(id).replaceChildren();
   }
   function showRoom() {
-    const f=floorForOffice(),w=f?.workers.find(x=>x.id===current);
+    const f=floorForOffice(),w=officeById(f,current);
     if(!w){clearOffice();return;}
     textIfChanged(by('officeTitle'),w.name);
     textIfChanged(by('officeProject'),f.name);
@@ -269,12 +281,13 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     const prior=result && (w.observedAt!==result.observedAt || w.tag!==result.tag ||
       w.activity!==result.activity || w.artifactUrl!==result.artifactUrl);
     const resultLink=(url,label)=>url?'<a class="thread" href="'+safe(url)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>':'';
-    const detail='<div class="office-status-line"><b>'+safe(statusLabel(w))+'</b>'+(stamp?'<time>'+safe(stamp)+'</time>':'')+'</div>'+
-      '<h3>Reported activity</h3><p>'+safe(w.activity||'No individual activity detail was recorded.')+'</p>'+
-      (w.role?'<p class="office-meta">'+safe(w.role)+'</p>':'')+
+    const handles = (f.allWorkers || f.workers).map(worker=>worker.handle);
+    const detail=(w.name!==workerName(w.handle) ? '<p class="office-meta">Executor · '+safe(workerName(w.handle))+'</p>' : '')+'<div class="office-status-line"><b>'+safe(statusLabel(w))+'</b>'+(stamp?'<time>'+safe(stamp)+'</time>':'')+'</div>'+
+      '<h3>Reported activity</h3><p>'+safe(workerMentions(w.activity,handles)||'No individual activity detail was recorded.')+'</p>'+
+      (w.role?'<p class="office-meta">'+safe(workerMentions(w.role,handles))+'</p>':'')+
       (w.tag||w.source?'<p class="office-meta">'+safe([w.tag,w.source].filter(Boolean).join(' · '))+'</p>':'')+
       resultLink(w.artifactUrl,'Open result ↗')+
-      (prior?'<h3>Last completed result</h3><p>'+safe(result.activity || 'Completed work recorded.')+'</p>'+
+      (prior?'<h3>Last completed result</h3><p>'+safe(workerMentions(result.activity,handles) || 'Completed work recorded.')+'</p>'+
         (result.observedAt?'<p class="office-meta">'+safe(dateText(result.observedAt))+'</p>':'')+
         resultLink(result.artifactUrl,'Open previous result ↗'):'')+
       '<a class="office-permalink" href="#overview/'+encodeURIComponent(f.id)+'/office/'+encodeURIComponent(w.handle)+'">Link to this office</a>'+
@@ -286,7 +299,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
       previousDetail=detail;
       if(focused) [...target.querySelectorAll('a')].find(link=>link.getAttribute('href')===focused)?.focus({preventScroll:true});
     }
-    by('officePrevious').disabled=by('officeNext').disabled=f.workers.length<2;
+    by('officePrevious').disabled=by('officeNext').disabled=navigationWorkers(f).length<2;
     if(!dialog.open)dialog.showModal();
   }
   // A fragment keeps the selected private office through a reload without
@@ -298,7 +311,8 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   }
   function step(direction) {
     const f=floorForOffice();if(!f)return;
-    chooseOffice(f.workers[(f.workers.findIndex(x=>x.id===current)+direction+f.workers.length)%f.workers.length]);
+    const options=navigationWorkers(f);
+    chooseOffice(options[(options.findIndex(x=>x.id===current)+direction+options.length)%options.length]);
   }
   root.onclick=event=>{
     const pan=event.target.closest('[data-pan]');
@@ -324,7 +338,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   by('officeNext').onclick=()=>step(1);
   by('officePrevious').onclick=()=>step(-1);
   by('officeSector').onclick=()=>{const id=floorForOffice()?.id;dialog.close();if(id)selectProject(id);};
-  by('fullHandles').onchange=()=>scene.classList.toggle('short-handles',!by('fullHandles').checked);
+  by('archivedWorkers').onchange=onRouteChange;
   by('roomZoom').oninput=()=>{scene.style.setProperty('--bay',by('roomZoom').value+'px');roomNav();};
   by('sceneFocus').onclick=()=>{focus=!focus;draw();};
   by('scenePlay').onclick=()=>{
@@ -334,16 +348,19 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   };
   return {
     update(next,selected,isPrivate) {
-      floors=next;project=selected;privateView=isPrivate;
+      if (!isPrivate) by('archivedWorkers').checked=false;
+      floors=isPrivate && by('archivedWorkers').checked ? next.map(floor=>({...floor,workers:floor.allWorkers || floor.workers})) : next;
+      project=selected;privateView=isPrivate;
       draw();
       const count=floors.reduce((n,f)=>n+f.workers.length,0);
-      by('towerCoverage').textContent=!floors.length?'':isPrivate?count+' recorded workers · Names reflect available execution records.':'Worker offices are private.';
-      by('fullHandles').closest('details').hidden=!privateView;
+      by('towerCoverage').textContent=!floors.length?'':isPrivate?count+(count===1?' visible office':' visible offices'):'Worker offices are private.';
+      by('archivedWorkers').closest('details').hidden=!privateView;
       const [view,floor,word,handle]=location.hash.slice(1).split('/');
       if(privateView && view==='overview' && word==='office' && handle) {
         try {
           const f=floors.find(f=>f.id===decodeURIComponent(floor));
-          const w=f?.workers.find(w=>w.handle===decodeURIComponent(handle));
+          const decoded=decodeURIComponent(handle);
+          const w=officeByHandle(f,decoded);
           if(w){current=w.id;project=f.id;showRoom();return;}
         } catch {}
       }

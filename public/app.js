@@ -2,6 +2,7 @@ import { ownerSkip } from './skip.js';
 import { workspaceViews } from './workspace.js';
 import { mountTower } from './tower.js';
 import { buildTowerFloors } from './roster.js';
+import { workerMentions } from './worker-roster.js';
 const $ = id => document.getElementById(id);
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const embedded = $('orbital-snapshot');
@@ -28,7 +29,7 @@ function emblem(a) {
   const [color,tint]=tones[index];
   return '<span aria-hidden="true" class="emblem" style="--hue:'+color+';--tint:'+tint+'"><svg viewBox="0 0 24 24">'+marks[index]+'</svg></span>';
 }
-const state={agents:[],events:[],reports:[],center:{},at:null,id:null,snapshot:null,floors:[],access:'anonymous'};
+const state={agents:[],events:[],reports:[],center:{},at:null,id:null,snapshot:null,floors:[],workerHandles:new Set(),access:'anonymous'};
 let watch=null, busy=false, lastText='',issue='',publicObserved=0,expiryTimer,expiresAt=Infinity,validator='',controller=null;
 const chosen=()=>state.agents.find(a=>a.id===state.id);
 function status(a) {
@@ -78,14 +79,15 @@ function markup(el,html) {
   if(rendered.get(el)!==html){el.innerHTML=html;rendered.set(el,html);}
 }
 function roster(target,items) {
-  const buttons=items.map(a=>'<button type="button" class="sector" data-agent="'+escape(a.id)+'" aria-pressed="'+(state.id===a.id)+'">'+emblem(a)+'<span class="copy"><strong>'+escape(a.name)+'</strong>'+badge(a)+(a.task?'<span class="task-preview">'+escape(a.task)+'</span>':'')+'</span><span class="chev" aria-hidden="true">&rsaquo;</span></button>');
+  const buttons=items.map(a=>'<button type="button" class="sector" data-agent="'+escape(a.id)+'" aria-pressed="'+(state.id===a.id)+'">'+emblem(a)+'<span class="copy"><strong>'+escape(a.name)+'</strong>'+badge(a)+(a.task?'<span class="task-preview">'+escape(displayWork(a.task))+'</span>':'')+'</span><span class="chev" aria-hidden="true">&rsaquo;</span></button>');
   markup(target,buttons.join('')||empty('No matching sectors.'));
 }
 function allowedThread(url) {
   try {const u=new URL(url);return u.protocol==='https:' && u.hostname==='chatgpt.com' && !u.username && !u.password ? u.href : null;} catch {return null;}
 }
 const link=(url,text,style='')=>url?'<a class="thread '+style+'" href="'+escape(url)+'" target="_blank" rel="noopener noreferrer">'+escape(text)+' &nearr;</a>':'';
-const field=(label,value,cls='')=>value?'<div class="field '+cls+'"><h4>'+escape(label)+'</h4><p>'+escape(value)+'</p></div>':'';
+const displayWork = value => workerMentions(value,state.workerHandles);
+const field=(label,value,cls='')=>value?'<div class="field '+cls+'"><h4>'+escape(label)+'</h4><p>'+escape(displayWork(value))+'</p></div>':'';
 const fact=(label,html)=>html?'<div><dt>'+escape(label)+'</dt><dd>'+html+'</dd></div>':'';
 function inspector() {
   const a=chosen();
@@ -98,7 +100,7 @@ function inspector() {
     (privateView() && a.sourceType==='sector'?'<a class="work-history-link" href="#history/'+encodeURIComponent(a.id)+'">View sector history</a>':'')+
     field('Needs attention',a.blocker,'blocked')+field('Current assignment',a.task)+
     field('Observed activity',status(a)==='working'?a.liveActivity?.action:null)+field('Observed progress',a.observedProgress)+
-    (a.detail?'<div class="field"><h4>Latest result</h4><p>'+escape(a.detail)+'</p>'+time(a.lastResultAt)+'</div>':'')+
+    (a.detail?'<div class="field"><h4>Latest result</h4><p>'+escape(displayWork(a.detail))+'</p>'+time(a.lastResultAt)+'</div>':'')+
     field('Next assignment',a.nextTask)+
     '<dl class="meta">'+fact('Execution',escape(a.executionMode||a.source))+fact('Last activity',time(a.liveActivity?.observedAt??a.lastSeen))+fact('Source checked',time(a.sourceObservedAt))+fact('Next check',time(a.nextRun))+'</dl>'+artifact+'</div>';
 }
@@ -158,14 +160,14 @@ function checkExpiry() {
   renderSelection();workCache=null;renderWorkViews(locationParts().view);scheduleExpiry();
 }
 function report(r) {
-  return '<article class="report">'+time(r.at)+'<p>'+escape(r.summary)+'</p>'+(Array.isArray(r.items)?r.items:[]).map(item=>{
+  return '<article class="report">'+time(r.at)+'<p>'+escape(displayWork(r.summary))+'</p>'+(Array.isArray(r.items)?r.items:[]).map(item=>{
     const a=state.agents.find(a=>a.id===item.agentId);if(!a)return '';
     return '<details><summary>'+escape(a.name)+'</summary><div class="report-detail">'+field('Accomplished',item.accomplished)+field('Next assignment',item.next)+'</div></details>';
   }).join('')+'</article>';
 }
 function events(rows) {
   return rows.map(e=>{const a=state.agents.find(a=>a.id===e.agentId);
-    return '<article class="event"><div><small>'+escape(a?.name||'Control hub')+'</small>'+time(e.at)+'<strong>'+escape(e.title)+'</strong></div></article>';}).join('')||empty('No recorded activity.');
+    return '<article class="event"><div><small>'+escape(a?.name||'Control hub')+'</small>'+time(e.at)+'<strong>'+escape(displayWork(e.title))+'</strong></div></article>';}).join('')||empty('No recorded activity.');
 }
 function renderDirectory() {
   const term=$('agentSearch').value.trim().toLowerCase();
@@ -262,6 +264,7 @@ function apply(raw) {
   state.snapshot=data;
   const sectors=new Map(data.agents.filter(a=>a?.sourceType==='sector' && typeof a.id==='string' && typeof a.name==='string').map(a=>[a.id,a]));
   state.floors=projectFloors(Date.now());
+  state.workerHandles=new Set(state.floors.flatMap(f=>(f.allWorkers||f.workers).map(w=>w.handle)));
   state.agents=state.floors.map(f=>{
     if(!privateView())return {id:f.id,name:f.name,status:f.status,sourceType:'sector'};
     return sectors.get(f.id) || {id:f.id,name:f.name,status:f.status,workerProject:true};
@@ -288,7 +291,7 @@ function showAccess(mode) {
   if(wasPrivate && !owner){
     $('skipStatus').textContent='';
     if(location.hash.includes('/office/') || ownerPages.includes(location.hash.slice(1).split('/')[0]))history.replaceState(null,'','#overview');
-    Object.assign(state,{agents:[],events:[],reports:[],center:{},floors:[],snapshot:null,id:null,at:null});
+    Object.assign(state,{agents:[],events:[],reports:[],center:{},floors:[],workerHandles:new Set(),snapshot:null,id:null,at:null});
     lastText='';validator='';station.update([],null,false);
     if($('hubDialog').open)$('hubDialog').close();
     $('hubSectors').replaceChildren();$('coordinatorLink').removeAttribute('href');

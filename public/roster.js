@@ -1,5 +1,7 @@
 // Owner-side projection of the Work producer's execution ledger. Sector records,
 // historical thread references and planned assignments do not identify workers.
+import { rosterOffices, workerName } from './worker-roster.js';
+
 const list = value => Array.isArray(value) ? value : [];
 const string = value => typeof value === 'string' ? value.trim() : '';
 const handleOf = value => /^\/root(?:\/[a-zA-Z0-9_-]+)*$/.test(string(value)) ? string(value) : '';
@@ -130,8 +132,19 @@ function floorRoster(sector, runs, events, lifecycle, now) {
       latest.rawStatus === 'verified' ? 'completed' :
       terminal.has(latest.rawStatus) || ['created','assigned'].includes(latest.rawStatus) ? latest.rawStatus : 'reported';
     const result = results.get(handle);
+    // Keep an unfinished assignment visible when its activity animation expires.
+    const hasOpenWork = ordered.some(report => {
+      if (!['created','assigned'].includes(report.rawStatus) && !liveStatuses.has(report.rawStatus)) return false;
+      if (report.time <= (lastStop.get(handle) ?? -1)) return false;
+      return Boolean(report.tag) || !result || report.time > result.time;
+    }) || [sector.pendingAssignment,sector.queuedFollowup,sector.researchFollowup].some(slot => {
+      if (!slot || slot.executorId !== handle || !slot.claimId || !['assigned','running','working','waiting','blocked'].includes(stateOf(slot.status))) return false;
+      const disposition = reports.get(slot.tag);
+      return !disposition || !['verified','completed','idle','failed'].includes(disposition.rawStatus) || Date.parse(slot.claimedAt) > disposition.time;
+    });
+    const roleEvidence = runs.findLast(run => run?.tag===latest.tag && tagOn(run.tag,sector.id) && run.executorId===handle && string(run.nameSource) && string(run.specialistName));
     const lastResult = result ? {observedAt:result.observedAt,tag:result.tag,activity:result.activity,artifactUrl:result.artifactUrl,source:result.source} : null;
-    workers.push({id:sector.id+':'+handle,handle,name:handle,role:latest.role,projectId:sector.id,projectName:sector.name,
+    workers.push({id:sector.id+':'+handle,handle,name:workerName(handle),hasOpenWork,verifiedRole:roleEvidence?.specialistName || latest.role,role:latest.role,projectId:sector.id,projectName:sector.name,
       active:latest.active,expiresAt:latest.expiresAt,lastResult,status,activity:latest.activity || 'No individual activity description was recorded.',
       observedAt:latest.observedAt,tag:latest.tag,source:latest.source,artifactUrl:latest.artifactUrl});
   }
@@ -173,6 +186,16 @@ export function buildTowerFloors(snapshot, {access, now=Date.now()}={}) {
     const roster = floorRoster(sector,runs,events,lifecycle,now);
     const recent = lifecycle.length && roster.workers.reduce((last,w)=>!last || Date.parse(w.observedAt)>Date.parse(last.observedAt) ? w : last,null);
     const status = roster.workers.some(worker=>worker.active) ? 'working' : recent?.status || sector.status;
-    return {id:sector.id,name:sector.name,status,...roster};
+    const policy = snapshot?.commandCenter?.execution?.workerRosterPolicy;
+    if (!Array.isArray(policy?.roles)) return {id:sector.id,name:sector.name,status,...roster};
+    const candidates = roster.workers.map(worker => ({
+      projectId:sector.id,executorId:worker.handle,verifiedRole:worker.verifiedRole,
+      terminal:terminal.has(worker.status),hasOpenWork:worker.hasOpenWork || worker.active,
+      sortAt:Date.parse(worker.observedAt) || 0,worker
+    }));
+    const workers = rosterOffices(candidates,policy.roles).map(({row,label}) =>
+      label===row.worker.name ? row.worker : {...row.worker,name:label}
+    ).sort((a,b)=>a.name.localeCompare(b.name) || a.handle.localeCompare(b.handle));
+    return {id:sector.id,name:sector.name,status,coverage:roster.coverage,workers,allWorkers:roster.workers};
   });
 }
