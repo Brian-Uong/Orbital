@@ -308,6 +308,12 @@ function verifiedRelease(row) {
   return lower(row.status)==='published and verified' && Boolean(instant(row.verifiedAt) &&
     [row.liveUrl,row.prUrl,row.githubUrl].some(safeLink));
 }
+function revisedReview(receipt, releases) {
+  const original = releases.find(row => row.id === receipt.reviewId);
+  return releases.find(row => row.revisionOfResponseId === receipt.id && row.revisesReviewId === receipt.reviewId) ||
+    releases.find(row => original?.responseId === receipt.id && row.id === original.revisionReviewId &&
+      row.revisesReviewId === receipt.reviewId && !row.revisionOfResponseId);
+}
 function releaseLane(row) {
   const status=lower(row.status);
   if(['denied','declined','closed','cancelled','canceled','superseded','deferred'].includes(status))return 'archive';
@@ -453,16 +459,31 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
         const approver=text(r.ownerDecision?.approver || r.approval?.approver || r.approver || r.decisionOwner);
         return !stationProject(r) && r.approvalRequired!==false && r.releaseMode!=='automatic' && (!approver || /^(brian( uong)?|owner)$/i.test(approver));
       });
-      const progress=releaseGroups(releases,sectors,allowSkip);
       const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);
-      const responseHistory = ['revise','deny'].map(decision=>{
-        const rows=responses.filter(r=>r.decision===decision);
+      const revisions = responses.filter(receipt => receipt.decision === 'revise').map(receipt => ({
+        receipt, original: releases.find(row => row.id === receipt.reviewId), revised: revisedReview(receipt,releases)
+      }));
+      const superseded = new Set(revisions.filter(item => item.revised).map(item => item.receipt.reviewId));
+      const progress=releaseGroups(releases.filter(row => !superseded.has(row.id)),sectors,allowSkip);
+      const resolved = item => item.revised && (verifiedRelease(item.revised) || releaseLane(item.revised) === 'archive');
+      const groups = [
+        ['Requested revisions', revisions.filter(item => !item.revised)],
+        ['Revisions prepared', revisions.filter(item => item.revised && !resolved(item))],
+        ['Resolved revision requests', revisions.filter(resolved)],
+        ['Denied ideas', responses.filter(receipt => receipt.decision === 'deny').map(receipt => ({
+          receipt, original: releases.find(row => row.id === receipt.reviewId)
+        }))]
+      ];
+      const responseHistory = groups.map(([title,rows])=>{
         if(!rows.length)return '';
-        return '<details class="release-progress response-history" data-decision-key="responses/'+decision+'"><summary>'+(decision==='revise'?'Requested revisions':'Denied ideas')+' ('+rows.length+')</summary><ul>'+rows.map(receipt=>{
-          const original=list(snapshot?.commandCenter?.execution?.releaseReviews).find(r=>r.id===receipt.reviewId);
-          const revised=list(snapshot?.commandCenter?.execution?.releaseReviews).find(r=>r.revisionOfResponseId===receipt.id);
+        return '<details class="release-progress response-history"><summary>'+title+' ('+rows.length+')</summary><ul>'+rows.map(({receipt,original,revised})=>{
+          const outcome = revised ? (verifiedRelease(revised) ? 'Repair published and verified' : 'Revised result: '+text(revised.status)) :
+            receipt.decision === 'deny' ? 'Declined by you' : original?.releaseError ? 'Repair blocked' : 'Awaiting repair';
           return '<li><h3>'+esc(receipt.review?.title || receipt.reviewId)+'</h3>'+date(receipt)+
-            '<p>'+esc(original?.releaseProgress || '')+'</p>'+(revised?'<a class="thread" href="#needs/'+encodeURIComponent('review/'+revised.id)+'">Open revised review</a>':'')+
+            '<p><strong>'+esc(outcome)+'</strong></p><p>'+esc(revised?.releaseProgress || original?.releaseProgress || '')+'</p>'+
+            (revised?'<a class="thread" href="#needs/'+encodeURIComponent('review/'+revised.id)+'">Open revised result '+esc(revised.id)+'</a>':
+              '<dl>'+caption('What is needed',original?.releaseError || original?.waitingDetails?.needed)+
+              caption('Next step',original?.repairAction || original?.waitingDetails?.nextAction)+'</dl>')+
             (receipt.editedOutput?'<h4>Your edited output</h4><p class="review-copy">'+esc(receipt.editedOutput)+'</p>':'')+
             (receipt.instructions?'<h4>Your instructions</h4><p class="review-copy">'+esc(receipt.instructions)+'</p>':'')+'</li>';
         }).join('')+'</ul></details>';
@@ -474,8 +495,3 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
-
-
-
-
-
