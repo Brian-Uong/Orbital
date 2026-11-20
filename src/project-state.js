@@ -185,7 +185,8 @@ function preserveDecisions(current, incoming, service) {
 export async function handleProjectState(request, env, seed) {
   try {
     const controlRoute = new URL(request.url).pathname === '/api/workflow-control';
-    const approvalRoute = controlRoute || new URL(request.url).pathname === '/api/release-approval';
+    const responseRoute = new URL(request.url).pathname === '/api/release-response';
+    const approvalRoute = responseRoute || controlRoute || new URL(request.url).pathname === '/api/release-approval';
     const read = !approvalRoute && (request.method === 'GET' || request.method === 'HEAD');
     if ((!approvalRoute && !read && request.method !== 'PUT') || (approvalRoute && request.method !== 'POST')) {
       const response = json({error:'Use GET, HEAD or PUT.'}, 405);
@@ -227,11 +228,34 @@ export async function handleProjectState(request, env, seed) {
           const next = {paused:intent.paused,updatedAt:at,source:'Owner Command'};
           return {record:{...current,updatedAt:at,commandCenter:{...current.commandCenter,workflowControl:next}},result:next};
         }
+        if (responseRoute) {
+          const {decision, editedOutput = '', instructions = ''} = intent;
+          if (!['deny','revise'].includes(decision) || typeof editedOutput !== 'string' || typeof instructions !== 'string' ||
+              editedOutput.length > 20000 || instructions.length > 10000) throw new ApiError(400,'Enter a valid decision and keep edits within the displayed limits.');
+          if (decision === 'revise' && !editedOutput.trim() && !instructions.trim()) throw new ApiError(400,'Add your revised output or instructions.');
+          const prior = (ledger.ownerReviewResponses || []).find(r => r.reviewId === intent.reviewId &&
+            JSON.stringify(r.review) === intent.expectedReview && r.decision === decision && r.editedOutput === editedOutput && r.instructions === instructions);
+          if (prior) return {result:{responseId:prior.id,applied:false}};
+          if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
+          const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
+          if (!review || JSON.stringify(review) !== intent.expectedReview || review.responseId ||
+              !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review'].includes(review.status)) {
+            throw new ApiError(409,'This idea is no longer awaiting your decision.');
+          }
+          const at = new Date(Math.max(Date.now(),Date.parse(current.updatedAt)+1)).toISOString();
+          const receipt = {id:'owner-response/'+review.id+'/'+at,reviewId:review.id,at,source:'Owner Needs Brian',
+            decision,editedOutput,instructions,review:structuredClone(review)};
+          const entry = {...review,status:decision === 'deny' ? 'denied' : 'changes requested',responseId:receipt.id,
+            releaseProgress:decision === 'deny' ? 'Denied by Brian. This revision will not be published.' : 'Your edits are queued for the next hourly check. The revised result will return here for approval.'};
+          const record = {...current,updatedAt:at,commandCenter:{...current.commandCenter,execution:{...ledger,
+            ownerReviewResponses:[...(ledger.ownerReviewResponses || []),receipt],releaseReviews:ledger.releaseReviews.map(r=>r===review?entry:r)}}};
+          return {record,result:{responseId:receipt.id,applied:true}};
+        }
         const prior = (ledger.ownerApprovals || []).find(a => a.reviewId === intent.reviewId && JSON.stringify(a.review) === intent.expectedReview);
         if (prior) return {result:{approvalId:prior.id,applied:false}};
         if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
         const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
-        if (!review || JSON.stringify(review) !== intent.expectedReview || !review.action || !review.destination ||
+        if (!review || review.responseId || JSON.stringify(review) !== intent.expectedReview || !review.action || !review.destination ||
             !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review'].includes(review.status)) {
           throw new ApiError(409,'This release is no longer awaiting your approval.');
         }
@@ -271,6 +295,29 @@ export async function handleProjectState(request, env, seed) {
         const after = incoming.commandCenter.execution?.releaseReviews?.find(r=>r.id===receipt.reviewId);
         if (before?.approvalId===receipt.id && after?.approvalId!==receipt.id) throw new ApiError(409,'Keep approved releases and their receipt references.');
       }
+      const responses = current.commandCenter.execution?.ownerReviewResponses || [];
+      if (JSON.stringify(responses) !== JSON.stringify(incoming.commandCenter.execution?.ownerReviewResponses || [])) {
+        throw new ApiError(409,'Preserve all owner review responses. Use the response action for new decisions.');
+      }
+      const reviews = incoming.commandCenter.execution?.releaseReviews || [];
+      for (const receipt of responses) {
+        const row = reviews.find(r=>r.id===receipt.reviewId);
+        if (!row || row.responseId !== receipt.id || row.status !== (receipt.decision === 'deny' ? 'denied' : 'changes requested')) {
+          throw new ApiError(409,'Keep the original owner decision. Submit revised work as a new review.');
+        }
+      }
+      for (const row of reviews) {
+        if (row.approvalId && !approvals.some(a=>a.id===row.approvalId && a.reviewId===row.id)) {
+          throw new ApiError(409,'Every approval must belong to this exact review.');
+        }
+        if (!row.revisionOfResponseId) continue;
+        const receipt = responses.find(r=>r.id===row.revisionOfResponseId && r.decision==='revise');
+        if (!receipt || row.id===receipt.reviewId || row.revisesReviewId!==receipt.reviewId) throw new ApiError(409,'Invalid revision lineage.');
+        if (!current.commandCenter.execution?.releaseReviews?.some(r=>r.id===row.id) &&
+            (row.status!=='awaiting owner approval' || row.approvalId || row.responseId)) {
+          throw new ApiError(409,'Revised work requires a new owner review before publication.');
+        }
+      }
       const previousEvents = current.commandCenter.execution?.workerEvents ?? [];
       if (previousEvents.length) {
         const nextEvents = new Map((incoming.commandCenter.execution?.workerEvents ?? [])
@@ -289,4 +336,5 @@ export async function handleProjectState(request, env, seed) {
       error instanceof ApiError ? error.status : 503);
   }
 }
+
 

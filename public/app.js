@@ -215,6 +215,7 @@ function renderWorkViews(view) {
   for(const el of document.querySelectorAll('[data-private-nav]'))el.hidden=!owner;
   const destinations={history:'historyBody',needs:'needsBody',roadmap:'roadmapBody',overview:'waitingBody'};
   if(!owner || !state.snapshot){
+    if($('reviewEditor').open){$('reviewEditor').close();$('reviewEditForm').reset();editingReview=null;}
     workCache=null;
     for(const id of Object.values(destinations))markup($(id),'');
     markup($('historyKind'),'<option value="all">All types</option>');
@@ -394,28 +395,65 @@ async function controlWorkflow(paused){
 $('pauseWorkflow').onclick=()=>controlWorkflow(true);
 $('resumeWorkflow').onclick=()=>controlWorkflow(false);
 let savingApproval=false;
-$('needsBody').addEventListener('click',async event=>{
-  const button=event.target.closest('[data-approve-review]');
-  if (!button || savingApproval || embedded || state.access!=='owner') return;
-  const review=state.snapshot?.commandCenter.execution?.releaseReviews?.find(r=>r.id===button.dataset.approveReview);
-  if (!review || !window.confirm('Approve this change and queue its push?\n\n'+review.title+'\n'+review.action+'\nDestination: '+review.destination)) return;
-  savingApproval=true;button.disabled=true;
-  const notice=$('approvalStatus');notice.textContent='Recording approval…';
-  try {
+let editingReview=null, editOpener=null;
+const reviewEditor=$('reviewEditor');
+function closeReviewEditor(){
+  if(savingApproval)return;
+  reviewEditor.close();editingReview=null;$('reviewEditForm').reset();
+  if(editOpener?.isConnected)editOpener.focus();else $('pageTitle').focus();
+  editOpener=null;
+}
+$('reviewEditClose').onclick=closeReviewEditor;
+$('reviewEditCancel').onclick=closeReviewEditor;
+reviewEditor.addEventListener('cancel',event=>{event.preventDefault();closeReviewEditor();});
+async function saveReviewDecision(review,decision,edits={}){
+  if(savingApproval || embedded || state.access!=='owner')return false;
+  savingApproval=true;
+  const notice=decision==='revise'?$('reviewEditNotice'):$('approvalStatus');
+  notice.textContent='Saving your decision…';
+  $('reviewEditSubmit').disabled=true;
+  try{
     const read=await fetch('/api/state',{cache:'no-store',redirect:'error',credentials:'same-origin'});
-    if (!read.ok || read.headers.get('Orbit-Access')!=='owner') throw Error('Sign in as the owner and try again.');
+    if(!read.ok || read.headers.get('Orbit-Access')!=='owner')throw Error('Sign in as the owner and try again.');
     const current=await read.json();
     const fresh=current.commandCenter.execution?.releaseReviews?.find(r=>r.id===review.id);
-    if(JSON.stringify(fresh)!==JSON.stringify(review)) throw Error('This review changed. Refresh and review the latest version.');
-    const saved=await fetch('/api/release-approval',{method:'POST',credentials:'same-origin',redirect:'error',
-      headers:{'Content-Type':'application/json','If-Match':read.headers.get('ETag') || ''},
-      body:JSON.stringify({reviewId:review.id,expectedReview:JSON.stringify(review)})});
-    const result=await saved.json();if(!saved.ok)throw Error(result.error || 'Approval could not be saved.');
+    if(JSON.stringify(fresh)!==JSON.stringify(review))throw Error('This review changed. Your text is still here; copy it before closing, then refresh and review the latest version.');
+    const saved=await fetch(decision==='approve'?'/api/release-approval':'/api/release-response',{
+      method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json','If-Match':read.headers.get('ETag') || ''},
+      body:JSON.stringify({reviewId:review.id,expectedReview:JSON.stringify(review),decision,...edits})});
+    const result=await saved.json();if(!saved.ok)throw Error(result.error || 'Your decision could not be saved.');
     validator='';await refresh();
-    if(!state.snapshot.commandCenter.execution?.ownerApprovals?.some(a=>a.id===result.approvalId))throw Error('Refresh to confirm whether approval was saved.');
-    notice.textContent='Approved and queued. The next hourly check will validate and push this change.';
-  } catch(error){notice.textContent=error.message;}
-  finally {savingApproval=false;button.disabled=false;}
+    const ledger=state.snapshot?.commandCenter.execution;
+    if(!(decision==='approve'?ledger?.ownerApprovals:ledger?.ownerReviewResponses)?.some(r=>r.id===(result.approvalId || result.responseId)))throw Error('Refresh to confirm whether your decision was saved.');
+    $('approvalStatus').textContent=decision==='approve'?'Approved and queued for the next hourly check.':decision==='deny'?'Denied. This idea has moved to Denied ideas and will not be published.':'Edits saved. The next hourly check will prepare a revised idea and return it here for approval.';
+    return true;
+  }catch(error){notice.textContent=error.message;return false;}
+  finally{savingApproval=false;$('reviewEditSubmit').disabled=false;}
+}
+$('needsBody').addEventListener('click',async event=>{
+  const button=event.target.closest('[data-approve-review],[data-deny-review],[data-edit-review]');
+  if(!button || savingApproval || embedded || state.access!=='owner')return;
+  const id=button.dataset.approveReview || button.dataset.denyReview || button.dataset.editReview;
+  const review=state.snapshot?.commandCenter.execution?.releaseReviews?.find(r=>r.id===id);if(!review)return;
+  if(button.hasAttribute('data-edit-review')){
+    editingReview=structuredClone(review);editOpener=button;
+    $('reviewEditTitle').textContent=review.title || review.id;
+    $('reviewEditedOutput').value=[review.proposedOutput,review.output,review.summary].find(v=>typeof v==='string'&&v.trim()) || '';
+    $('reviewInstructions').value='';$('reviewEditNotice').textContent='';
+    reviewEditor.showModal();$('reviewEditedOutput').focus();return;
+  }
+  const decision=button.hasAttribute('data-deny-review')?'deny':'approve';
+  if(!window.confirm(decision==='deny'?'Deny this idea? It will leave the pending list and will not be published.\n\n'+review.title:'Approve this change and queue its push?\n\n'+review.title+'\n'+review.action+'\nDestination: '+review.destination))return;
+  button.disabled=true;await saveReviewDecision(review,decision);button.disabled=false;
+});
+$('reviewEditForm').addEventListener('submit',async event=>{
+  event.preventDefault();if(!editingReview || savingApproval)return;
+  const editedOutput=$('reviewEditedOutput').value, instructions=$('reviewInstructions').value;
+  const original=[editingReview.proposedOutput,editingReview.output,editingReview.summary].find(v=>typeof v==='string'&&v.trim()) || '';
+  if((!editedOutput.trim()&&!instructions.trim()) || (editedOutput===original&&!instructions.trim())){
+    $('reviewEditNotice').textContent='Change the proposed output or add instructions for AI.';return;
+  }
+  if(await saveReviewDecision(editingReview,'revise',{editedOutput,instructions}))closeReviewEditor();
 });
 
 let savingSkip=false;
@@ -492,4 +530,5 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
+
 

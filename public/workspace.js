@@ -274,7 +274,7 @@ function decisionInbox(sectors, records, waiting) {
     }
   }
   for (const [id,row] of registry) {
-    if ((row.approvalId && row.status !== 'awaiting owner approval') || stationProject(row) || row.approvalRequired === false || row.releaseMode === 'automatic' || !ownerDecision(row)) continue;
+    if (row.responseId || (row.approvalId && row.status !== 'awaiting owner approval') || stationProject(row) || row.approvalRequired === false || row.releaseMode === 'automatic' || !ownerDecision(row)) continue;
     const fallback = mirror.get(id);
     const projectKey = text(row.project || row.projectId || fallback?.row.project || fallback?.sector.id);
     const project = projects.get(lower(projectKey));
@@ -282,8 +282,8 @@ function decisionInbox(sectors, records, waiting) {
       ...list(row.sources).map(source=>source.url)].map(safeLink).find(Boolean);
     const register = safeLink(row.registerUrl || fallback?.row.ownerDecision?.evidenceUrl);
     entries.set('review/'+id,{key:'review/'+id,id,project:project?.name || text(row.projectName) || projectKey || 'Unassigned',
-      canApprove:!!(row.action && row.destination), order:project?.order ?? sectors.length, title:text(row.title) || text(row.ownerDecision?.question) || id,
-      action:row.action || row.ownerDecision?.reason, destination:row.destination, notes:row.limitations,
+      canRespond:true, canApprove:!!(row.action && row.destination), order:project?.order ?? sectors.length, title:text(row.title) || text(row.ownerDecision?.question) || id,
+      action:row.action || row.ownerDecision?.reason, destination:row.destination, notes:row.limitations, output:row.proposedOutput || row.output || row.summary, revisionOf:row.revisesReviewId,
       next:row.ownerDecision?.nextAction || row.liveImpact, test:row.test || row.acceptanceTest,
       evidence:primary || register, register:primary && register !== primary ? register : ''});
   }
@@ -294,9 +294,11 @@ function decisionList(rows, allowApproval) {
   if (!rows.length) return empty('No decisions need your input.');
   const entries = rows.map((row,i) => {
     const body = caption('Requested action',row.action) + caption('Destination',row.destination) +
-      caption('Review notes',row.notes) + caption('Verification',row.test) + caption('After your decision',row.next);
+      caption('Proposed output',row.output) + caption('Revises review',row.revisionOf) + caption('Review notes',row.notes) + caption('Verification',row.test) + caption('After your decision',row.next);
     const links = artifactLink(row.evidence,'Review evidence') + artifactLink(row.register,'Open review entry');
-    const action = allowApproval && row.canApprove ? '<div class="approval-actions"><button type="button" data-approve-review="'+esc(row.id)+'">Approve and queue push</button><p>The next hourly check validates this revision and publishes the approved change. Progress appears here.</p></div>' : '';
+    const action = allowApproval && row.canRespond ? '<div class="approval-actions"><div class="review-buttons">'+
+      (row.canApprove ? '<button type="button" data-approve-review="'+esc(row.id)+'">Approve and queue push</button>' : '') +
+      '<button type="button" class="review-edit" data-edit-review="'+esc(row.id)+'">Edit / request changes</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div><p>Approvals and requested revisions run at the next hourly check. Revisions return for your approval before publishing.</p></div>' : '';
     return '<li><details name="owner-decisions" data-decision-key="'+esc(row.key)+'"><summary>' +
       '<span class="decision-number" aria-hidden="true">'+(i+1)+'</span><span class="decision-title">'+esc(row.title)+'</span>' +
       '<span class="decision-project">'+esc(row.project)+'</span><span class="decision-toggle" aria-hidden="true"></span></summary>' +
@@ -337,14 +339,28 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     },
     get decisions() {
       if (decisionsHtml !== undefined) return decisionsHtml;
-      const releases = list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>r.approvalId);
+      const releases = list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>r.approvalId && !r.responseId);
       const progress = releases.length ? '<section class="release-progress"><h2>Approved releases</h2><ul>'+releases.map(r=>
         '<li><h3>'+esc(r.title || r.id)+'</h3><p>'+esc(r.status)+'</p><p>'+esc(r.releaseProgress || r.releaseError || '')+'</p>'+artifactLink(r.liveUrl || r.prUrl || r.githubUrl,'Open published result')+'</li>').join('')+'</ul></section>' : '';
-      return decisionsHtml = decisionList(decisions,allowSkip)+progress;
+      const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);
+      const responseHistory = ['revise','deny'].map(decision=>{
+        const rows=responses.filter(r=>r.decision===decision);
+        if(!rows.length)return '';
+        return '<details class="release-progress response-history" data-decision-key="responses/'+decision+'"><summary>'+(decision==='revise'?'Requested revisions':'Denied ideas')+' ('+rows.length+')</summary><ul>'+rows.map(receipt=>{
+          const original=list(snapshot?.commandCenter?.execution?.releaseReviews).find(r=>r.id===receipt.reviewId);
+          const revised=list(snapshot?.commandCenter?.execution?.releaseReviews).find(r=>r.revisionOfResponseId===receipt.id);
+          return '<li><h3>'+esc(receipt.review?.title || receipt.reviewId)+'</h3>'+date(receipt)+
+            '<p>'+esc(original?.releaseProgress || '')+'</p>'+(revised?'<a class="thread" href="#needs/'+encodeURIComponent('review/'+revised.id)+'">Open revised review</a>':'')+
+            (receipt.editedOutput?'<h4>Your edited output</h4><p class="review-copy">'+esc(receipt.editedOutput)+'</p>':'')+
+            (receipt.instructions?'<h4>Your instructions</h4><p class="review-copy">'+esc(receipt.instructions)+'</p>':'')+'</li>';
+        }).join('')+'</ul></details>';
+      }).join('');
+      return decisionsHtml = decisionList(decisions,allowSkip)+progress+responseHistory;
     },
     get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions); },
     count:decisions.length,
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
+
 

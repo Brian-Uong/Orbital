@@ -554,3 +554,15 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .release-progress{margin-top:2rem}.release-progress ul{list-style:none;padding:0}.release-progress li{padding:1rem;margin:.75rem 0;border:1px solid var(--line);border-radius:12px;overflow-wrap:anywhere}.release-progress h3{margin:0}.release-progress p{line-height:1.5}
 
 .workflow-controls{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:1rem;padding:1.2rem;margin-top:1rem;background:#1d3449;border:1px solid var(--line);border-radius:14px}.workflow-controls p{margin:.3rem 0;color:var(--muted);max-width:65ch}.workflow-buttons{display:flex;gap:.75rem;flex-wrap:wrap}.workflow-buttons button{min-height:44px;font-size:.95rem}.workflow-controls [role=status]:not(:empty){flex-basis:100%}
+
+
+.review-buttons{display:flex;flex-wrap:wrap;gap:.75rem;align-items:center}
+.approval-actions .review-edit,.review-editor button{background:#27475b;color:#e9f4ff;border:1px solid #7196aa}
+.approval-actions .review-deny{background:transparent;color:#ffc6bf;border:1px solid #c7867c}
+.review-editor{width:min(760px,calc(100vw - 2rem));max-height:calc(100dvh - 2rem);box-sizing:border-box;overflow:auto;background:#1d3449;color:#eef6ff;border:1px solid #7196aa;border-radius:16px;padding:1.5rem}
+.review-editor::backdrop{background:rgb(5 15 25 / .75)}
+.review-editor h2{font-size:1.35rem}.review-editor p{line-height:1.55;overflow-wrap:anywhere}.review-editor label{display:block;margin:1.2rem 0 .5rem;font-weight:600}
+.review-editor textarea{display:block;box-sizing:border-box;width:100%;resize:vertical;min-height:6rem;background:#142b3d;color:#eef6ff;border:1px solid #7196aa;border-radius:8px;padding:.85rem;font:inherit;line-height:1.55}
+.review-editor button{min-height:44px;font:inherit;padding:.65rem 1rem}.review-editor :focus-visible,.review-buttons :focus-visible{outline:3px solid #b3f1e2;outline-offset:3px}
+.response-history>summary{cursor:pointer;padding:1rem;border:1px solid var(--line);border-radius:10px;font-weight:600}.review-copy,.decision-detail dd{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:600px){.review-buttons{align-items:stretch}.review-buttons button{flex:1 1 100%}.review-editor{padding:1rem}}
