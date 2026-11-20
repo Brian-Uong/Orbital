@@ -169,3 +169,37 @@ test('owner list preserves real assignment decisions, safe evidence and legacy r
   assert.doesNotMatch(data.decisions,/javascript:bad|<draft>/);
   assert.equal(workspaceViews({agents:[],commandCenter:{execution:{releaseReviews:[]}}}).count,0);
 });
+
+test('Command groups waits by their actual project and links directly to each open decision',()=>{
+  const review = (id,project,title,status='awaiting owner approval')=>({id,project,title,status});
+  const alpha = {id:'alpha',name:'Alpha',pendingAssignment:{tag:'mirror',task:'Grouped placeholder',displayOnly:true,
+    status:'awaiting owner approval',project:'beta',reviewIds:['B/1','B 2','finished']},
+    queuedFollowup:{tag:'alpha-001',status:'blocked',task:'Check <source>',blocker:'Missing source file',
+      acceptanceTest:'A lengthy Roadmap test.',partialEvidenceUrl:link('blocker')}};
+  const reviews = [review('B/1','beta','First & second'), review('B 2','beta','Repair label'),
+    review('A','alpha','Check copy'), review('C','New project','Decide on venue'),
+    review('finished','beta','Past decision','approved'), review('auto','Orbital Build','Station task')];
+  const data=workspaceViews({agents:[alpha,{id:'beta',name:'Beta'},{id:'idle',name:'Idle'}],
+    commandCenter:{execution:{releaseReviews:reviews}}});
+  assert.equal((data.waiting.match(/<details /g)||[]).length,3);
+  assert.match(data.waiting,/Alpha<[^>]+><span class="wait-count">1 decision · 1 dependency<\/span><\/summary>/);
+  assert.match(data.waiting,/Beta<[^>]+><span class="wait-count">2 decisions<\/span><\/summary>/);
+  assert.match(data.waiting,/Alpha[\s\S]+Beta[\s\S]+New project/);
+  for(const title of ['Check &lt;source&gt;','Missing source file',link('blocker'),'First &amp; second'])assert.ok(data.waiting.includes(title));
+  for(const key of ['review/B/1','review/B 2','review/A','review/C']){
+    assert.ok(data.waiting.includes('href="#needs/'+encodeURIComponent(key)+'"'));
+    assert.ok(data.decisions.includes('data-decision-key="'+key+'"'));
+  }
+  assert.doesNotMatch(data.waiting,/Grouped placeholder|Past decision|Station task|Idle|lengthy Roadmap test|<details[^>]* open\b/);
+  assert.match(data.roadmap,/A lengthy Roadmap test/);
+});
+
+test('Command handles an empty queue and keeps legacy assignment decisions reachable',()=>{
+  assert.match(read([],{}).waiting,/No work is waiting/);
+  const legacy={tag:'professional-013',status:'awaiting owner approval',task:'Choose the release day'};
+  const dependency={tag:'professional-014',status:'waiting',task:'Wait for a sample',partialEvidenceUrl:'javascript:unsafe()'};
+  const data=read([],{pendingAssignment:legacy,queuedFollowup:dependency});
+  assert.match(data.waiting,/1 decision · 1 dependency/);
+  assert.ok(data.waiting.includes('href="#needs/'+encodeURIComponent('professional/'+legacy.tag)+'"'));
+  assert.doesNotMatch(data.waiting,/javascript:|Review evidence/);
+});

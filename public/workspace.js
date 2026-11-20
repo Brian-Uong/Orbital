@@ -202,8 +202,41 @@ function roadmapCard(sector, items) {
   return '<article class="panel workspace-card"><h2>' + esc(sector.name) + '</h2><div class="workspace-lanes">' +
     ['Current','Next','Waiting'].map(lane => '<section><h3>' + lane + '</h3>' + (items.filter(i => i.lane === lane).map(planEntry).join('') || empty('None recorded.')) + '</section>').join('') + '</div></article>';
 }
-function waitingItems(items, nothing) {
-  return items.length ? '<div class="workspace-grid">' + items.map(i => '<article class="panel workspace-card"><h3>' + esc(i.sector.name) + '</h3>' + planEntry(i) + '</article>').join('') + '</div>' : empty(nothing);
+function waitingDependency({row,tag,reason}) {
+  const title = text(row.title) || text(row.task || row.intendedOutcome || row.question) || tag;
+  const detail = text(row.blocker || row.dependency || row.waitingFor);
+  const evidence = artifactLink(row.partialEvidenceUrl || row.evidenceUrl || row.input,'Review evidence');
+  return '<li><span class="wait-reason">'+esc(reason)+'</span><p class="wait-task">'+esc(title)+'</p>' +
+    (detail && detail !== title ? '<p class="wait-note">'+esc(detail)+'</p>' : '') + evidence + '</li>';
+}
+function waitingItems(sectors, items, decisions) {
+  const group = name => ({name, decisions:[], dependencies:[]});
+  const groups = new Map(sectors.map(s => ['sector/'+s.id,group(s.name)]));
+  for (const review of decisions) {
+    const sector = sectors[review.order];
+    const key = sector ? 'sector/'+sector.id : 'project/'+review.project;
+    if (!groups.has(key)) groups.set(key,group(review.project));
+    groups.get(key).decisions.push(review);
+  }
+  for (const item of items) {
+    if (!item.decision && !(item.row.displayOnly && item.row.reviewIds?.length)) {
+      groups.get('sector/'+item.sector.id).dependencies.push(item);
+    }
+  }
+  const rows = [];
+  for (const [key,{name,decisions:reviews,dependencies}] of groups) {
+    if (!reviews.length && !dependencies.length) continue;
+    const counts = [];
+    if (reviews.length) counts.push(reviews.length+(reviews.length === 1 ? ' decision' : ' decisions'));
+    if (dependencies.length) counts.push(dependencies.length+(dependencies.length === 1 ? ' dependency' : ' dependencies'));
+    const reviewList = reviews.map(r => '<li><a href="#needs/'+encodeURIComponent(r.key)+'">'+esc(r.title || r.id)+'</a></li>').join('');
+    rows.push('<li><details name="command-waits" data-wait-key="'+esc(key)+'"><summary>' +
+      '<span class="wait-project">'+esc(name)+'</span><span class="wait-count">'+counts.join(' · ')+'</span></summary>' +
+      '<div class="wait-content">'+(reviewList ? '<section><h3>Needs Brian</h3><ul class="wait-reviews">'+reviewList+'</ul></section>' : '') +
+      (dependencies.length ? '<section><h3>Project dependencies</h3><ul class="wait-dependencies">'+dependencies.map(waitingDependency).join('')+'</ul></section>' : '') +
+      '</div></details></li>');
+  }
+  return rows.length ? '<ul role="list" class="wait-list" aria-label="Projects with waiting work">'+rows.join('')+'</ul>' : empty('No work is waiting.');
 }
 function decisionInbox(sectors, records, waiting) {
   const projects = new Map(sectors.flatMap((sector,order) => {
@@ -292,7 +325,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       return roadmapHtml;
     },
     get decisions() { return decisionsHtml ??= decisionList(decisions); },
-    get waiting() { return waitingHtml ??= waitingItems(waiting,'No work is waiting.'); },
+    get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions); },
     count:decisions.length,
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };

@@ -181,23 +181,23 @@ function connection() {
   $('checkTime').textContent=[label,dateText(state.at)].filter(Boolean).join(' · ');
 }
 let workCache=null;
-function renderDecisions(html) {
-  const panel=$('needsBody');
+function renderDisclosures(panel,html,keyAttribute,heading) {
   if (rendered.get(panel)===html) return;
-  const previous=[...panel.querySelectorAll('details[data-decision-key]')];
-  const openKey=previous.find(row=>row.open)?.dataset.decisionKey;
+  const selector='details['+keyAttribute+']';
+  const previous=[...panel.querySelectorAll(selector)];
+  const openKey=previous.find(row=>row.open)?.getAttribute(keyAttribute);
   const focused=document.activeElement;
   const position=previous.findIndex(row=>row.contains(focused));
   const href=position>=0 ? focused.closest('a')?.getAttribute('href') : null;
   markup(panel,html);
-  const rows=[...panel.querySelectorAll('details[data-decision-key]')];
-  const open=rows.find(row=>row.dataset.decisionKey===openKey);
+  const rows=[...panel.querySelectorAll(selector)];
+  const open=rows.find(row=>row.getAttribute(keyAttribute)===openKey);
   if(open) open.open=true;
   if(position>=0){
-    const same=rows.find(row=>row.dataset.decisionKey===previous[position].dataset.decisionKey);
+    const same=rows.find(row=>row.getAttribute(keyAttribute)===previous[position].getAttribute(keyAttribute));
     const target=same || rows[Math.min(position,rows.length-1)];
     const link=href && same?.open && [...same.querySelectorAll('a')].find(a=>a.getAttribute('href')===href);
-    const next=link || target?.querySelector('summary') || $('pageTitle');
+    const next=link || target?.querySelector('summary') || heading;
     if(!target) next.setAttribute('tabindex','-1');
     next.focus({preventScroll:true});
   }
@@ -226,8 +226,9 @@ function renderWorkViews(view) {
     markup($('historyKind'),data.filters);
     $('historyKind').value=Array.from($('historyKind').options).some(o=>o.value===kind)?kind:'all';
   }
-  if(view==='needs')renderDecisions(data.decisions);
-  else if(destinations[view])markup($(destinations[view]),view==='overview'?data.waiting:data[view]);
+  if(view==='needs')renderDisclosures($('needsBody'),data.decisions,'data-decision-key',$('pageTitle'));
+  else if(view==='overview')renderDisclosures($('waitingBody'),data.waiting,'data-wait-key',$('waitingHeading'));
+  else if(destinations[view])markup($(destinations[view]),data[view]);
 }
 function render(purge=false) {
   const view=locationParts().view;
@@ -330,6 +331,7 @@ async function refresh() {
     if(resumed)refresh();
   }
 }
+let linkedDecision='';
 function route(event) {
   const {view,id}=locationParts();
   const titles={overview:'Mission control',agents:'Sector directory',activity:'Progress briefings',history:'Results history',needs:'Needs Brian',roadmap:'Roadmap'};
@@ -341,7 +343,17 @@ function route(event) {
   }
   if (id && state.agents.some(a=>a.id===id))state.id=id;
   render();
-  if(event?.type==='hashchange' && ownerPages.includes(view)){
+  const decisionKey=view==='needs' ? id : '';
+  if(!decisionKey) linkedDecision='';
+  const targetDecision=decisionKey && (decisionKey!==linkedDecision || event?.type==='hashchange') &&
+    [...$('needsBody').querySelectorAll('details[data-decision-key]')].find(row=>row.dataset.decisionKey===decisionKey);
+  if(targetDecision){
+    linkedDecision=decisionKey;
+    targetDecision.open=true;
+    const summary=targetDecision.querySelector('summary');
+    summary.focus({preventScroll:true});
+    summary.scrollIntoView({block:'nearest'});
+  } else if(event?.type==='hashchange' && ownerPages.includes(view)){
     const heading=$(view+'View').querySelector('h2')||$('pageTitle');
     heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true});
   }
