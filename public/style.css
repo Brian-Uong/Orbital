@@ -574,3 +574,6 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .wait-requirements dd{margin:0;font-size:1rem;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap}
 .wait-links{display:flex;flex-wrap:wrap;gap:1rem;margin-top:.75rem}.wait-links a{padding:.4rem 0;line-height:1.6}
 @media(max-width:600px){.wait-requirements>div{grid-template-columns:minmax(0,1fr);gap:.25rem}.wait-requirements{gap:1.2rem}}
+
+.review-outcome {display:block;margin-top:.3rem;font-size:.9rem;font-weight:400;line-height:1.45;overflow-wrap:anywhere}
+.decision-detail dd,.workspace-fields dd {overflow-wrap:anywhere}

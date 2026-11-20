@@ -107,6 +107,8 @@ function historyCard(sector, rows) {
   const recent = rows.find(row => verified(row) && safeLink(row.artifactUrl || row.reviewUrl));
   return '<article class="panel workspace-card"><h2><a href="' + path(sector.id) + '">' + esc(sector.name) + '</a></h2>' +
     (recent ? '<p class="workspace-meta">Latest verified result · ' + date(stamp(recent)) + '</p><p>' + esc(recent.summary || recent.evidence) + '</p>' +
+      (recent.intendedOutcome && recent.intendedOutcome !== recent.summary ? '<p><strong>Purpose</strong> · '+esc(recent.intendedOutcome)+'</p>' : '') +
+      (recent.limitations ? '<p><strong>Limitations</strong> · '+esc(recent.limitations)+'</p>' : '') +
       (text(recent.test || recent.evidence) ? '<p><strong>Verified</strong> · ' + esc(recent.test || recent.evidence) + '</p>' : '') : empty('No matching verified deliverable.')) +
     '<div class="workspace-actions"><a class="thread" href="' + path(sector.id) + '">View history</a>' + (recent ? artifactLink(recent.artifactUrl || recent.reviewUrl,'Open latest result') : '') + '</div></article>';
 }
@@ -280,6 +282,29 @@ function waitingItems(sectors, items, decisions) {
   }
   return rows.length ? '<ul role="list" class="wait-list" aria-label="Projects with waiting work">'+rows.join('')+'</ul>' : empty('No work is waiting.');
 }
+function reviewOutcome(row) {
+  return text(row.proposedOutput) || text(row.revisionOutcome) || text(row.output) || text(row.summary) ||
+    (Array.isArray(row.details) ? row.details : []).map(text).find(line => line && line !== row.destination && line !== row.limitations && line !== row.liveImpact) ||
+    text(row.action);
+}
+function reviewFacts(row) {
+  const check = row.latestPinnedCheck;
+  const target = [row.targetBranch, row.baseCommit].filter(Boolean).join(' · ');
+  return caption('What approval authorizes', row.proposedAction || row.action) +
+    caption('Destination', row.destination) + caption('Effect on the live project', row.liveImpact) +
+    caption('Test results', row.test || row.acceptanceTest) +
+    (Number.isInteger(check?.nativePassing) ? caption('Latest independent check', check.nativePassing + ' native tests passed. ' + (check.scope || '')) : '') +
+    caption('Limitations at review', row.limitations) + caption('Reviewed branch and base', target) +
+    caption('Reviewed patch SHA-256', row.diffSha256);
+}
+function releaseDescription(row) {
+  const result = row.liveUrl ? artifactLink(row.liveUrl,'Open live site') : artifactLink(row.prUrl || row.githubUrl,'Open published result');
+  return '<article class="workspace-card panel"><h3>'+esc(row.title || row.id)+'</h3><p>'+esc(reviewOutcome(row))+'</p>'+
+    '<p class="workspace-meta">'+esc(row.status)+' · '+esc(row.id)+'</p>'+
+    (row.releaseProgress ? '<p>'+esc(row.releaseProgress)+'</p>' : '')+
+    '<details><summary>Scope, tests and evidence</summary><dl class="workspace-fields">'+reviewFacts(row)+'</dl>'+
+    artifactLink(row.diffUrl || row.evidenceUrl || row.artifactUrl || list(row.sources)[0]?.url,'Open reviewed evidence')+'</details>'+result+'</article>';
+}
 function decisionInbox(sectors, records, waiting) {
   const projects = new Map(sectors.flatMap((sector,order) => {
     const label = {name:sector.name, order};
@@ -315,7 +340,7 @@ function decisionInbox(sectors, records, waiting) {
     const register = safeLink(row.registerUrl || fallback?.row.ownerDecision?.evidenceUrl);
     entries.set('review/'+id,{key:'review/'+id,id,project:project?.name || text(row.projectName) || projectKey || 'Unassigned',
       canRespond:true, canApprove:!!(row.action && row.destination), order:project?.order ?? sectors.length, title:text(row.title) || text(row.ownerDecision?.question) || id,
-      action:row.action || row.ownerDecision?.reason, destination:row.destination, notes:row.limitations, output:row.proposedOutput || row.output || row.summary, revisionOf:row.revisesReviewId,
+      record:row, outcome:reviewOutcome(row), action:row.action || row.ownerDecision?.reason, destination:row.destination, notes:row.limitations, output:row.proposedOutput || row.output || row.summary, revisionOf:row.revisesReviewId,
       next:row.ownerDecision?.nextAction || row.liveImpact, test:row.test || row.acceptanceTest,
       evidence:primary || register, register:primary && register !== primary ? register : ''});
   }
@@ -325,14 +350,14 @@ function decisionInbox(sectors, records, waiting) {
 function decisionList(rows, allowApproval) {
   if (!rows.length) return empty('No decisions need your input.');
   const entries = rows.map((row,i) => {
-    const body = caption('Requested action',row.action) + caption('Destination',row.destination) +
+    const body = row.record ? reviewFacts(row.record) + caption('Revises review',row.revisionOf) : caption('Requested action',row.action) + caption('Destination',row.destination) +
       caption('Proposed output',row.output) + caption('Revises review',row.revisionOf) + caption('Review notes',row.notes) + caption('Verification',row.test) + caption('After your decision',row.next);
     const links = artifactLink(row.evidence,'Review evidence') + artifactLink(row.register,'Open review entry');
     const action = allowApproval && row.canRespond ? '<div class="approval-actions"><div class="review-buttons">'+
       (row.canApprove ? '<button type="button" data-approve-review="'+esc(row.id)+'">Approve and queue push</button>' : '') +
       '<button type="button" class="review-edit" data-edit-review="'+esc(row.id)+'">Edit / request changes</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div><p>Approvals and requested revisions run at the next hourly check. Revisions return for your approval before publishing.</p></div>' : '';
     return '<li><details name="owner-decisions" data-decision-key="'+esc(row.key)+'"><summary>' +
-      '<span class="decision-number" aria-hidden="true">'+(i+1)+'</span><span class="decision-title">'+esc(row.title)+'</span>' +
+      '<span class="decision-number" aria-hidden="true">'+(i+1)+'</span><span class="decision-title">'+esc(row.title)+(row.outcome && row.outcome!==row.title ? '<small class="review-outcome">'+esc(row.outcome)+'</small>' : '')+'</span>' +
       '<span class="decision-project">'+esc(row.project)+'</span><span class="decision-toggle" aria-hidden="true"></span></summary>' +
       '<div class="decision-detail"><p class="decision-ref">Review ID <strong>'+esc(row.id)+'</strong></p>' +
       (body ? '<dl>'+body+'</dl>' : '') + (links ? '<div class="decision-links">'+links+'</div>' : '') + action + '</div></details></li>';
@@ -357,6 +382,9 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       const selected = sectors.find(sector => sector.id === sectorId);
       historyHtml = selected ? sectorHistory(selected,rowsFor(selected)) :
         '<div class="workspace-grid">' + sectors.map(sector => historyCard(sector,rowsFor(sector))).join('') + '</div>';
+      const released=list(snapshot?.commandCenter?.execution?.releaseReviews).filter(row =>
+        row.status==='published and verified' && !stationProject(row) && (!selected || row.project===selected.id || row.projectId===selected.id));
+      if(released.length && activeKind==='all') historyHtml='<section><h2>Verified project releases</h2>'+released.map(releaseDescription).join('')+'</section>'+historyHtml;
       return historyHtml;
     },
     get roadmap() {
@@ -373,7 +401,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       if (decisionsHtml !== undefined) return decisionsHtml;
       const releases = list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>r.approvalId && !r.responseId);
       const progress = releases.length ? '<section class="release-progress"><h2>Approved releases</h2><ul>'+releases.map(r=>
-        '<li><h3>'+esc(r.title || r.id)+'</h3><p>'+esc(r.status)+'</p><p>'+esc(r.releaseProgress || r.releaseError || '')+'</p>'+artifactLink(r.liveUrl || r.prUrl || r.githubUrl,'Open published result')+'</li>').join('')+'</ul></section>' : '';
+        '<li>'+releaseDescription(r)+'</li>').join('')+'</ul></section>' : '';
       const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);
       const responseHistory = ['revise','deny'].map(decision=>{
         const rows=responses.filter(r=>r.decision===decision);
