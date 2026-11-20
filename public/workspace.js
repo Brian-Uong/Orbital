@@ -165,7 +165,10 @@ function sectorPlan(sector, now) {
     add({tag:sector.assignmentId, task:sector.task, status:sector.assignmentStatus || sector.status,
       acceptanceTest:sector.workAcceptance, blocker:sector.blocker, observedAt:live.observedAt || sector.workStartedAt,
       requiresOwnerApproval:sector.requiresOwnerApproval, ownerDecisionRequired:sector.ownerDecisionRequired, ownerDecision:sector.ownerDecision, approver:sector.approver, approval:sector.approval,
-      partialEvidenceUrl:sector.partialEvidenceUrl}, 'Current');
+      partialEvidenceUrl:sector.partialEvidenceUrl, waitingDetails:sector.waitingDetails,
+      waitingFor:sector.waitingFor, dependency:sector.dependency, dependencyType:sector.dependencyType,
+      dependencyOwner:sector.dependencyOwner, ownerAction:sector.ownerAction, nextAction:sector.nextAction,
+      nextCheckAt:sector.nextCheckAt, expectedAt:sector.expectedAt}, 'Current');
   }
   add(sector.pendingAssignment,'Current');
   add(sector.queuedFollowup,'Next');
@@ -212,12 +215,41 @@ function roadmapCard(sector, items) {
   return '<article class="panel workspace-card"><h2>' + esc(sector.name) + '</h2><div class="workspace-lanes">' +
     ['Current','Next','Waiting'].map(lane => '<section><h3>' + lane + '</h3>' + (items.filter(i => i.lane === lane).map(planEntry).join('') || empty('None recorded.')) + '</section>').join('') + '</div></article>';
 }
-function waitingDependency({row,tag,reason}) {
-  const title = text(row.title) || text(row.task || row.intendedOutcome || row.question) || tag;
-  const detail = text(row.blocker || row.dependency || row.waitingFor);
-  const evidence = artifactLink(row.partialEvidenceUrl || row.evidenceUrl || row.input,'Review evidence');
-  return '<li><span class="wait-reason">'+esc(reason)+'</span><p class="wait-task">'+esc(title)+'</p>' +
-    (detail && detail !== title ? '<p class="wait-note">'+esc(detail)+'</p>' : '') + evidence + '</li>';
+function waitingExplanation({row,reason}) {
+  const details=row.waitingDetails || {};
+  const explicitNeed=text(details.needed) || text(row.waitingFor) || text(row.blocker) || text(row.dependency);
+  const scheduled=reason==='Scheduled wait' || details.kind==='scheduled';
+  const stale=reason==='Awaiting fresh progress';
+  const observations=scheduled && /settle|next round|observation/i.test([row.task,row.waitingFor,row.dependency].filter(Boolean).join(' '));
+  const needed=explicitNeed || (observations?'More settled rounds or observations for the planned evaluation.':
+    scheduled?'The scheduled time or external data to become available.':
+    stale?'A fresh progress report from the assigned worker.':'The specific missing requirement has not been recorded yet.');
+  const owner=text(details.owner) || text(row.dependencyOwner) ||
+    (scheduled?'External data or the scheduled time; coordinator checks availability.':
+      stale?'Coordinator: verify the worker’s status.':'Coordinator: identify what is missing and who can provide it.');
+  const action=text(details.ownerAction) || text(row.ownerAction) ||
+    (scheduled?'No action from you is currently recorded.':
+      stale?'No action from you is currently recorded. The coordinator needs to check progress.':
+      'Not specified yet. The coordinator needs to provide an exact request before you can act.');
+  const next=text(details.nextAction) || text(row.nextAction) ||
+    (scheduled?'The coordinator checks availability on its hourly run and continues when the required data or time is available.':
+      stale?'The coordinator checks whether work is running, completed, or blocked and updates this item.':
+      'The coordinator must name the missing input, who provides it, and the step that unblocks this work.');
+  return {needed,owner,action,next,expectedAt:details.expectedAt || row.expectedAt,
+    nextCheckAt:row.nextCheckAt,label:scheduled?'Waiting for data or time':stale?'Progress needs checking':reason==='Missing source'?'Source material needed':'Input or access needed'};
+}
+function waitingDependency(item) {
+  const {row,tag}=item;
+  const title=text(row.title) || text(row.task || row.intendedOutcome || row.question) || tag;
+  const detail=waitingExplanation(item);
+  const evidence=artifactLink(row.partialEvidenceUrl || row.evidenceUrl || row.input,'Review evidence');
+  const action=artifactLink(row.waitingDetails?.actionUrl || row.actionUrl,'Open required source');
+  const timing=(instant(detail.expectedAt)?'<div><dt>Expected availability</dt><dd>'+date(detail.expectedAt)+'</dd></div>':'')+
+    (instant(detail.nextCheckAt)?'<div><dt>Next recorded check</dt><dd>'+date(detail.nextCheckAt)+'</dd></div>':'');
+  return '<li><span class="wait-reason">'+esc(detail.label)+'</span><p class="wait-task">'+esc(title)+'</p>'+
+    '<dl class="wait-requirements">'+caption('What is needed',detail.needed)+caption('Who acts next',detail.owner)+
+    caption('What you need to do',detail.action)+caption('Next step',detail.next)+timing+'</dl>'+
+    (action || evidence?'<div class="wait-links">'+action+evidence+'</div>':'')+'</li>';
 }
 function waitingItems(sectors, items, decisions) {
   const group = name => ({name, decisions:[], dependencies:[]});
@@ -238,12 +270,12 @@ function waitingItems(sectors, items, decisions) {
     if (!reviews.length && !dependencies.length) continue;
     const counts = [];
     if (reviews.length) counts.push(reviews.length+(reviews.length === 1 ? ' decision' : ' decisions'));
-    if (dependencies.length) counts.push(dependencies.length+(dependencies.length === 1 ? ' dependency' : ' dependencies'));
+    if (dependencies.length) counts.push(dependencies.length+(dependencies.length === 1 ? ' waiting item' : ' waiting items'));
     const reviewList = reviews.map(r => '<li><a href="#needs/'+encodeURIComponent(r.key)+'">'+esc(r.title || r.id)+'</a></li>').join('');
     rows.push('<li><details name="command-waits" data-wait-key="'+esc(key)+'"><summary>' +
       '<span class="wait-project">'+esc(name)+'</span><span class="wait-count">'+counts.join(' · ')+'</span></summary>' +
       '<div class="wait-content">'+(reviewList ? '<section><h3>Needs Brian</h3><ul class="wait-reviews">'+reviewList+'</ul></section>' : '') +
-      (dependencies.length ? '<section><h3>Project dependencies</h3><ul class="wait-dependencies">'+dependencies.map(waitingDependency).join('')+'</ul></section>' : '') +
+      (dependencies.length ? '<section><h3>What this work is waiting for</h3><ul class="wait-dependencies">'+dependencies.map(waitingDependency).join('')+'</ul></section>' : '') +
       '</div></details></li>');
   }
   return rows.length ? '<ul role="list" class="wait-list" aria-label="Projects with waiting work">'+rows.join('')+'</ul>' : empty('No work is waiting.');
@@ -362,5 +394,6 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
+
 
 

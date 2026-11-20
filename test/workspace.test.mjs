@@ -182,7 +182,7 @@ test('Command groups waits by their actual project and links directly to each op
   const data=workspaceViews({agents:[alpha,{id:'beta',name:'Beta'},{id:'idle',name:'Idle'}],
     commandCenter:{execution:{releaseReviews:reviews}}});
   assert.equal((data.waiting.match(/<details /g)||[]).length,3);
-  assert.match(data.waiting,/Alpha<[^>]+><span class="wait-count">1 decision · 1 dependency<\/span><\/summary>/);
+  assert.match(data.waiting,/Alpha<[^>]+><span class="wait-count">1 decision · 1 waiting item<\/span><\/summary>/);
   assert.match(data.waiting,/Beta<[^>]+><span class="wait-count">2 decisions<\/span><\/summary>/);
   assert.match(data.waiting,/Alpha[\s\S]+Beta[\s\S]+New project/);
   for(const title of ['Check &lt;source&gt;','Missing source file',link('blocker'),'First &amp; second'])assert.ok(data.waiting.includes(title));
@@ -199,7 +199,38 @@ test('Command handles an empty queue and keeps legacy assignment decisions reach
   const legacy={tag:'professional-013',status:'awaiting owner approval',task:'Choose the release day'};
   const dependency={tag:'professional-014',status:'waiting',task:'Wait for a sample',partialEvidenceUrl:'javascript:unsafe()'};
   const data=read([],{pendingAssignment:legacy,queuedFollowup:dependency});
-  assert.match(data.waiting,/1 decision · 1 dependency/);
+  assert.match(data.waiting,/1 decision · 1 waiting item/);
   assert.ok(data.waiting.includes('href="#needs/'+encodeURIComponent('professional/'+legacy.tag)+'"'));
   assert.doesNotMatch(data.waiting,/javascript:|Review evidence/);
+});
+
+
+test('waiting items explain recorded requirements, ownership and next steps without inventing owner tasks',()=>{
+ const row={tag:'professional-020',status:'blocked',task:'Compare the profile',blocker:'Source file missing',
+  waitingDetails:{needed:'A dated profile export',owner:'Brian',ownerAction:'Upload the profile export.',
+    nextAction:'Compare the export with verified experience.',actionUrl:link('upload')}};
+ const html=read([],{pendingAssignment:row}).waiting;
+ for(const phrase of ['What is needed','A dated profile export','Who acts next','Brian','What you need to do',
+  'Upload the profile export.','Compare the export with verified experience.',link('upload')])assert.ok(html.includes(phrase),phrase);
+ const unknown=read([],{pendingAssignment:{tag:'professional-021',status:'waiting',task:'Wait for input'}}).waiting;
+ assert.match(unknown,/specific missing requirement has not been recorded/);
+ assert.match(unknown,/coordinator needs to provide an exact request/);
+ assert.doesNotMatch(unknown,/Upload the profile/);
+});
+
+test('scheduled data waits identify what is pending and do not manufacture an owner requirement or date',()=>{
+ const row={tag:'professional-022',status:'waiting',task:'Evaluate newly settled prospective rounds through December 3.'};
+ const html=read([],{pendingAssignment:row}).waiting;
+ assert.match(html,/More settled rounds or observations/);
+ assert.match(html,/No action from you is currently recorded/);
+ assert.match(html,/hourly run/);assert.doesNotMatch(html,/Expected availability|Next recorded check|Project dependencies/);
+ const explicit=read([],{pendingAssignment:{...row,waitingDetails:{ownerAction:'Provide the missing sample.',expectedAt:'2026-12-03T18:00:00Z'}}}).waiting;
+ assert.match(explicit,/Provide the missing sample/);assert.match(explicit,/Expected availability/);
+});
+
+test('top-level waiting metadata survives projection and untrusted instructions remain plain text',()=>{
+ const html=read([],{task:'Check records',status:'blocked',blocker:'Missing source',waitingDetails:{needed:'<img src=x onerror=alert(1)>',
+  owner:'Coordinator',ownerAction:'Wait for clarification',nextAction:'Read the source',actionUrl:'javascript:bad()'}}).waiting;
+ assert.match(html,/&lt;img/);assert.match(html,/Wait for clarification/);assert.match(html,/Read the source/);
+ assert.doesNotMatch(html,/<img|javascript:bad/);
 });

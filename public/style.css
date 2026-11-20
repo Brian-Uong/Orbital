@@ -566,3 +566,11 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .review-editor button{min-height:44px;font:inherit;padding:.65rem 1rem}.review-editor :focus-visible,.review-buttons :focus-visible{outline:3px solid #b3f1e2;outline-offset:3px}
 .response-history>summary{cursor:pointer;padding:1rem;border:1px solid var(--line);border-radius:10px;font-weight:600}.review-copy,.decision-detail dd{white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:600px){.review-buttons{align-items:stretch}.review-buttons button{flex:1 1 100%}.review-editor{padding:1rem}}
+
+
+.wait-requirements{display:grid;gap:.9rem;margin:1rem 0 1.25rem;max-width:76ch}
+.wait-requirements>div{display:grid;grid-template-columns:minmax(9rem,11rem) minmax(0,1fr);gap:.5rem 1rem;align-items:start}
+.wait-requirements dt{font-size:.875rem;font-weight:600;color:var(--muted)}
+.wait-requirements dd{margin:0;font-size:1rem;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap}
+.wait-links{display:flex;flex-wrap:wrap;gap:1rem;margin-top:.75rem}.wait-links a{padding:.4rem 0;line-height:1.6}
+@media(max-width:600px){.wait-requirements>div{grid-template-columns:minmax(0,1fr);gap:.25rem}.wait-requirements{gap:1.2rem}}
