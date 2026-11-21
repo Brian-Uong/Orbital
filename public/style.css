@@ -603,3 +603,6 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .chat-folder small {margin:.15rem 0 .65rem;line-height:1.4}
 .chat-folder .chat-status {color:#f6ce97}
 .chat-hierarchy p {margin:.35rem auto 0;max-width:50ch}
+
+.evaluation-route {text-align:center;padding:.75rem;line-height:1.6;color:#e1edf0;background:#203847}.evaluation-route a {color:#a0ead8}.evaluation-route span {padding-inline:.4em}
+.tower-floor[hidden],.evaluation-route[hidden] {display:none}

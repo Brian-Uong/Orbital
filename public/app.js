@@ -1,6 +1,6 @@
 import { ownerSkip } from './skip.js';
 import { workspaceViews } from './workspace.js';
-import { renderConversations } from './conversations.js';
+import { conversationFloors } from './conversations.js';
 import { mountTower } from './tower.js';
 import { buildTowerFloors } from './roster.js';
 import { workerMentions } from './worker-roster.js';
@@ -48,7 +48,7 @@ function badge(a) {
   return '<span class="status" style="--status:'+color+'">'+escape(s.charAt(0).toUpperCase()+s.slice(1))+'</span>';
 }
 function openHub(){
-    const link=$('coordinatorLink'),url=allowedThread(state.center.coordinator?.threadUrl);
+    const link=$('coordinatorLink'),url=allowedThread(state.center.coordinator?.verifiedUrl);
     link.hidden=!url;
     if(url)link.href=url;else link.removeAttribute('href');
     const region=$('hubSectors');
@@ -130,7 +130,7 @@ function renderSelection() {
     const a=state.agents.find(agent=>agent.id===el.dataset.agent),indicator=el.querySelector('.status');
     if(a&&indicator&&indicator.textContent.toLowerCase()!==status(a))indicator.outerHTML=badge(a);
   });
-  if(view==='overview')station.update(floors,state.id,privateView());
+  if(view==='overview')station.update(conversationFloors(state.snapshot, floors, state.access),state.id,privateView());
   else if($('officeDialog').open)$('officeDialog').close();
   readouts();
 }
@@ -240,7 +240,7 @@ function renderWorkViews(view) {
   else if(destinations[view])markup($(destinations[view]),data[view]);
 }
 function render(purge=false) {
-  renderConversations($('chatHierarchy'),privateView() ? state.snapshot : null);
+  $('evaluationRoute').hidden = !privateView();
   const view=locationParts().view;
   const requested=locationParts().id;
   if (requested && state.agents.some(a=>a.id===requested))state.id=requested;

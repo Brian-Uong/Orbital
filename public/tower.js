@@ -282,7 +282,9 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
       w.activity!==result.activity || w.artifactUrl!==result.artifactUrl);
     const resultLink=(url,label)=>url?'<a class="thread" href="'+safe(url)+'" target="_blank" rel="noopener noreferrer">'+label+'</a>':'';
     const handles = (f.allWorkers || f.workers).map(worker=>worker.handle);
-    const detail=(w.name!==workerName(w.handle) ? '<p class="office-meta">Executor · '+safe(workerName(w.handle))+'</p>' : '')+'<div class="office-status-line"><b>'+safe(statusLabel(w))+'</b>'+(stamp?'<time>'+safe(stamp)+'</time>':'')+'</div>'+
+    const detail=w.conversation ? '<p>'+safe(w.role || 'Project conversation')+'</p>'+
+      (w.chatUrl ? resultLink(w.chatUrl,'Open conversation ↗') : '<p>Awaiting verified link</p>')+
+      (w.activity ? '<h3>Last recorded activity</h3><p>'+safe(w.activity)+'</p>' : '') : (w.name!==workerName(w.handle) ? '<p class="office-meta">Executor · '+safe(workerName(w.handle))+'</p>' : '')+'<div class="office-status-line"><b>'+safe(statusLabel(w))+'</b>'+(stamp?'<time>'+safe(stamp)+'</time>':'')+'</div>'+
       '<h3>Reported activity</h3><p>'+safe(workerMentions(w.activity,handles)||'No individual activity detail was recorded.')+'</p>'+
       (w.role?'<p class="office-meta">'+safe(workerMentions(w.role,handles))+'</p>':'')+
       (w.tag||w.source?'<p class="office-meta">'+safe([w.tag,w.source].filter(Boolean).join(' · '))+'</p>':'')+
@@ -299,6 +301,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
       previousDetail=detail;
       if(focused) [...target.querySelectorAll('a')].find(link=>link.getAttribute('href')===focused)?.focus({preventScroll:true});
     }
+    by('officeSector').hidden=['operations','evaluation'].includes(f.id);
     by('officePrevious').disabled=by('officeNext').disabled=navigationWorkers(f).length<2;
     if(!dialog.open)dialog.showModal();
   }
@@ -322,7 +325,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     }
     const office=event.target.closest('[data-worker]');
     if(office){opener=office;const f=floors.find(f=>f.id===office.closest('[data-floor]').dataset.floor);chooseOffice(f?.workers.find(w=>w.id===office.dataset.worker));return;}
-    const floor=event.target.closest('[data-project]');if(floor)selectProject(floor.dataset.project);
+    const floor=event.target.closest('[data-project]');if(floor){const f=floors.find(f=>f.id===floor.dataset.project);if(f && ['operations','evaluation'].includes(f.id))chooseOffice(f.workers[0]);else selectProject(floor.dataset.project);}
   };
   dialog.addEventListener('close',()=>{
     if(dialog.open)return;
@@ -338,7 +341,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   by('officeNext').onclick=()=>step(1);
   by('officePrevious').onclick=()=>step(-1);
   by('officeSector').onclick=()=>{const id=floorForOffice()?.id;dialog.close();if(id)selectProject(id);};
-  by('archivedWorkers').onchange=onRouteChange;
+
   by('roomZoom').oninput=()=>{scene.style.setProperty('--bay',by('roomZoom').value+'px');roomNav();};
   by('sceneFocus').onclick=()=>{focus=!focus;draw();};
   by('scenePlay').onclick=()=>{
@@ -348,13 +351,15 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   };
   return {
     update(next,selected,isPrivate) {
-      if (!isPrivate) by('archivedWorkers').checked=false;
-      floors=isPrivate && by('archivedWorkers').checked ? next.map(floor=>({...floor,workers:floor.allWorkers || floor.workers})) : next;
-      project=selected;privateView=isPrivate;
+
+      floors=next;
+      const route=location.hash.slice(1).split('/');
+      project=route[2]==='office' && next.some(f=>f.id===route[1]) ? route[1] : selected;
+      privateView=isPrivate;
       draw();
       const count=floors.reduce((n,f)=>n+f.workers.length,0);
       by('towerCoverage').textContent=!floors.length?'':isPrivate?count+(count===1?' visible office':' visible offices'):'Worker offices are private.';
-      by('archivedWorkers').closest('details').hidden=!privateView;
+      by('roomZoom').closest('details').hidden=!privateView;
       const [view,floor,word,handle]=location.hash.slice(1).split('/');
       if(privateView && view==='overview' && word==='office' && handle) {
         try {
