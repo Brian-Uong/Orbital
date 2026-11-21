@@ -49,3 +49,14 @@ test('mismatched legacy links and unverified publication remain unresolved', () 
   assert.doesNotMatch(view,/Resolved revision requests/);
   assert.doesNotMatch(view,/Repair published and verified/);
 });
+
+test('prepared decisions act once on the eligible child and disappear on access downgrade',()=>{
+  const snapshot=fixture(), child=snapshot.commandCenter.execution.releaseReviews.at(-1);
+  const html=workspaceViews(snapshot,{allowSkip:true}).decisions;
+  for(const action of ['approve','edit','deny']) assert.equal(html.split('data-'+action+'-review="'+child.id+'"').length,2);
+  assert.match(html,/Revisions prepared[\s\S]*data-approve-review="READY\/2"/);
+  assert.doesNotMatch(workspaceViews(snapshot).decisions,/data-approve-review=/);
+  snapshot.commandCenter.execution.evaluationGate={path:'/c/example'};
+  const held=workspaceViews(snapshot,{allowSkip:true}).decisions;
+  assert.match(held,/Awaiting evaluation/);assert.doesNotMatch(held,/data-approve-review=/);
+});

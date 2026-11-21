@@ -21,11 +21,25 @@ export function conversationFloors(snapshot, historyFloors, access) {
     const workers = chats.map(chat => {
       const url = originalChat(chat.url);
       const handle = 'chat:' + chat.name;
-      const receipt = url && receipts.filter(r => r.messageId && r.threadTitle === chat.name &&
-        r.threadUrl === url && r.project === id).sort((a,b) =>
-          String(b.observedAt).localeCompare(String(a.observedAt)))[0];
+      const matches = url ? receipts.filter(r => r.messageId && r.threadTitle === chat.name &&
+        r.threadUrl === url && (r.project === id || id === 'evaluation' && chat.name === ledger.evaluationGate?.name))
+        .sort((a,b)=>String(b.observedAt).localeCompare(String(a.observedAt))) : [];
+      const receipt = matches[0];
+      const type = r => r.type || r.id?.split('/')[0];
+      const sent = matches.find(r => type(r)==='sent'), reply = matches.find(r => ['reply','result'].includes(type(r)));
+      const verified = ledger.scheduledOriginalChatVerification;
+      const scheduled = matches.find(r => r.messageId === verified?.replyMessageId && r.runId === verified.runId &&
+        matches.some(s => s.messageId === verified.sentMessageId && s.runId === r.runId) &&
+        verified.ownerEquality && verified.anonymousPrivacyVerified);
+      const at = r => r && r.observedAt ? [r.observedAt,r.executionSource || (r.runId===scheduled?.runId && scheduled?'Scheduled Work':'mode unrecorded')].join(' · ') : 'Unrecorded';
+      const evidence = [
+        ['Last handoff',at(sent)], ['Last reply',at(reply)],
+        ['Requested model / effort',[sent?.requestedModel || 'Unknown',sent?.requestedReasoningEffort || 'Unknown'].join(' / ')],
+        ['Selected model / effort',[sent?.selectedModel || 'Unknown',sent?.selectedReasoningEffort || 'Unknown'].join(' / ')],
+        ['Runtime model',reply?.actualModel || 'Unverified'], ['Verified unattended result',at(scheduled)]
+      ];
       return {id:id + '/' + handle, handle, name:chat.name, projectId:id, projectName:name,
-        conversation:true, role:chat.scope, chatUrl:url, active:false,
+        conversation:true, evidence, role:chat.scope, chatUrl:url, active:false,
         status:url ? 'Idle' : 'Awaiting verified link', activity:receipt?.summary,
         observedAt:receipt?.observedAt, tag:receipt?.tag};
     });

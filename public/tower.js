@@ -284,6 +284,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     const handles = (f.allWorkers || f.workers).map(worker=>worker.handle);
     const detail=w.conversation ? '<p>'+safe(w.role || 'Project conversation')+'</p>'+
       (w.chatUrl ? resultLink(w.chatUrl,'Open conversation ↗') : '<p>Awaiting verified link</p>')+
+      '<dl class="workspace-fields">'+(w.evidence || []).map(([label,value])=>'<div><dt>'+safe(label)+'</dt><dd>'+safe(value)+'</dd></div>').join('')+'</dl>'+
       (w.activity ? '<h3>Last recorded activity</h3><p>'+safe(w.activity)+'</p>' : '') : (w.name!==workerName(w.handle) ? '<p class="office-meta">Executor · '+safe(workerName(w.handle))+'</p>' : '')+'<div class="office-status-line"><b>'+safe(statusLabel(w))+'</b>'+(stamp?'<time>'+safe(stamp)+'</time>':'')+'</div>'+
       '<h3>Reported activity</h3><p>'+safe(workerMentions(w.activity,handles)||'No individual activity detail was recorded.')+'</p>'+
       (w.role?'<p class="office-meta">'+safe(workerMentions(w.role,handles))+'</p>':'')+

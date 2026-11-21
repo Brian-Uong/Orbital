@@ -187,12 +187,17 @@ let workCache=null;
 function renderDisclosures(panel,html,keyAttribute,heading) {
   if (rendered.get(panel)===html) return;
   const selector='details['+keyAttribute+']';
+  const expanded=[...panel.querySelectorAll('details.release-progress[open], details.release-fold[open]')].map(el=>el.querySelector('summary')?.textContent?.replace(/\d+/g,'').trim());
   const previous=[...panel.querySelectorAll(selector)];
   const openKey=previous.find(row=>row.open)?.getAttribute(keyAttribute);
   const focused=document.activeElement;
   const position=previous.findIndex(row=>row.contains(focused));
   const href=position>=0 ? focused.closest('a')?.getAttribute('href') : null;
   markup(panel,html);
+  for(const el of panel.querySelectorAll('details.release-progress, details.release-fold')){
+    const label=el.querySelector('summary')?.textContent?.replace(/\d+/g,'').trim();
+    if(expanded.includes(label))el.open=true;
+  }
   const rows=[...panel.querySelectorAll(selector)];
   const open=rows.find(row=>row.getAttribute(keyAttribute)===openKey);
   if(open) open.open=true;
@@ -361,7 +366,7 @@ function route(event) {
     [...$('needsBody').querySelectorAll('details[data-decision-key]')].find(row=>row.dataset.decisionKey===decisionKey);
   if(targetDecision){
     linkedDecision=decisionKey;
-    targetDecision.open=true;
+    for(let node=targetDecision;node;node=node.parentElement?.closest('details')) node.open=true;
     const summary=targetDecision.querySelector('summary');
     summary.focus({preventScroll:true});
     summary.scrollIntoView({block:'nearest'});
@@ -428,7 +433,7 @@ async function saveReviewDecision(review,decision,edits={}){
     validator='';await refresh();
     const ledger=state.snapshot?.commandCenter.execution;
     if(!(decision==='approve'?ledger?.ownerApprovals:ledger?.ownerReviewResponses)?.some(r=>r.id===(result.approvalId || result.responseId)))throw Error('Refresh to confirm whether your decision was saved.');
-    $('approvalStatus').textContent=decision==='approve'?'Approved and queued for the next hourly check.':decision==='deny'?'Denied. This idea has moved to Denied ideas and will not be published.':'Edits saved. The next hourly check will prepare a revised idea and return it here for approval.';
+    $('approvalStatus').textContent=decision==='approve'?'Approval recorded for the requested action.':decision==='deny'?'Denied. This idea has moved to Denied ideas and will not be published.':'Edits saved. The next hourly check will prepare a revised idea and return it here for approval.';
     return true;
   }catch(error){notice.textContent=error.message;return false;}
   finally{savingApproval=false;$('reviewEditSubmit').disabled=false;}
@@ -450,7 +455,7 @@ $('needsBody').addEventListener('click',async event=>{
     reviewEditor.showModal();$('reviewEditedOutput').focus();return;
   }
   const decision=button.hasAttribute('data-deny-review')?'deny':'approve';
-  if(!window.confirm(decision==='deny'?'Deny this idea? It will leave the pending list and will not be published.\n\n'+review.title:'Approve this change and queue its push?\n\n'+review.title+'\n'+review.action+'\nDestination: '+review.destination))return;
+  if(!window.confirm(decision==='deny'?'Deny this idea? It will leave the pending list and will not be published.\n\n'+review.title:'Authorize this exact action?\n\n'+review.title+'\n'+review.action+'\nDestination: '+review.destination))return;
   button.disabled=true;await saveReviewDecision(review,decision);button.disabled=false;
 });
 $('reviewEditForm').addEventListener('submit',async event=>{

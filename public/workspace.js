@@ -1,3 +1,4 @@
+import { observedTransitions, waitAge } from './workflow-time.js';
 import { evaluationPassed } from './evaluation.js';
 import { canSkip, skipSlots } from './skip.js';
 import { workerName, workerMentions } from './worker-roster.js';
@@ -247,7 +248,7 @@ function waitingExplanation({row,reason}) {
   return {needed,owner,action,next,expectedAt:details.expectedAt || row.expectedAt,
     nextCheckAt:row.nextCheckAt,label:scheduled?'Waiting for data or time':stale?'Progress needs checking':reason==='Missing source'?'Source material needed':'Input or access needed'};
 }
-function waitingDependency(item) {
+function waitingDependency(item,timeline,now) {
   const {row,tag}=item;
   const title=text(row.title) || text(row.task || row.intendedOutcome || row.question) || tag;
   const detail=waitingExplanation(item);
@@ -257,10 +258,10 @@ function waitingDependency(item) {
     (instant(detail.nextCheckAt)?'<div><dt>Next recorded check</dt><dd>'+date(detail.nextCheckAt)+'</dd></div>':'');
   return '<li><span class="wait-reason">'+esc(detail.label)+'</span><p class="wait-task">'+esc(title)+'</p>'+
     '<dl class="wait-requirements">'+caption('What is needed',detail.needed)+caption('Who acts next',detail.owner)+
-    caption('What you need to do',detail.action)+caption('Next step',detail.next)+timing+'</dl>'+
+    caption('What you need to do',detail.action)+caption('Next step',detail.next)+caption('Elapsed',waitAge(timeline.filter(t=>t.tag===tag && t.project===item.sector.id),now))+timing+'</dl>'+
     (action || evidence?'<div class="wait-links">'+action+evidence+'</div>':'')+'</li>';
 }
-function waitingItems(sectors, items, decisions) {
+function waitingItems(sectors, items, decisions,timeline,now) {
   const group = name => ({name, decisions:[], dependencies:[]});
   const groups = new Map(sectors.map(s => ['sector/'+s.id,group(s.name)]));
   for (const review of decisions) {
@@ -284,7 +285,7 @@ function waitingItems(sectors, items, decisions) {
     rows.push('<li><details name="command-waits" data-wait-key="'+esc(key)+'"><summary>' +
       '<span class="wait-project">'+esc(name)+'</span><span class="wait-count">'+counts.join(' · ')+'</span></summary>' +
       '<div class="wait-content">'+(reviewList ? '<section><h3>Needs Brian</h3><ul class="wait-reviews">'+reviewList+'</ul></section>' : '') +
-      (dependencies.length ? '<section><h3>What this work is waiting for</h3><ul class="wait-dependencies">'+dependencies.map(waitingDependency).join('')+'</ul></section>' : '') +
+      (dependencies.length ? '<section><h3>What this work is waiting for</h3><ul class="wait-dependencies">'+dependencies.map(item=>waitingDependency(item,timeline,now)).join('')+'</ul></section>' : '') +
       '</div></details></li>');
   }
   return rows.length ? '<ul role="list" class="wait-list" aria-label="Projects with waiting work">'+rows.join('')+'</ul>' : empty('No work is waiting.');
@@ -319,47 +320,52 @@ function releaseLane(row) {
   const status=lower(row.status);
   if(['denied','declined','closed','cancelled','canceled','superseded','deferred'].includes(status))return 'archive';
   if(repairStatuses.has(status) || text(row.releaseError))return 'blocked';
+  if(row.responseId)return 'blocked';
+  if(status==='review completed')return instant(row.verifiedAt)?'manual':'publishing';
   if(verifiedRelease(row))return 'published';
   if(['publishing','published','pushed','deployed','verifying','awaiting verification','published and verified'].includes(status))return 'publishing';
   if(row.approvalId && status!=='awaiting owner approval' || ['approved','approved queued','queued for release'].includes(status))return 'queued';
-  if(row.responseId)return 'blocked';
   if(ownerDecision(row))return 'pending';
   return 'blocked';
 }
-function releaseDescription(row, {allowRepair=false, project=''}={}) {
+function releaseDescription(row, {allowRepair=false, project='', timeline=[], now=Date.now(), paused=false}={}) {
   const lane=releaseLane(row),verified=lane==='published';
   const result=artifactLink(row.liveUrl,verified?'Open verified live site':'Open site (verification pending)')+
     artifactLink(row.prUrl,verified?'Open verified pull request':'Open pull request')+
     artifactLink(row.githubUrl,verified?'Open verified GitHub result':'Open GitHub result');
   const status=verified?(row.liveUrl?'Published and verified':row.prUrl?'Pull request pushed and verified; production deployment is not recorded':'GitHub push verified; production deployment is not recorded'):
-    lane==='queued'?'Approved; waiting for the hourly coordinator':lane==='publishing'?'Publishing or awaiting verification':text(row.status) || 'Needs clarification';
+    lane==='manual'?'Completed review · manual use':lane==='queued'?'Approved and queued':lane==='publishing'?'Publishing or awaiting verification':text(row.status) || 'Needs clarification';
   const facts=lane==='blocked'?'<dl class="wait-requirements">'+
     caption('What needs fixing',row.releaseError || row.blocker || row.waitingDetails?.needed || row.releaseProgress || 'The coordinator has not recorded the blocker yet.')+
     caption('Next step',row.repairAction || row.waitingDetails?.nextAction || row.nextAction || (row.responseId?'The requested revision is already queued. The coordinator will return it for approval.':'Use Fix and resubmit to give instructions. AI will prepare a new review on the next unpaused hourly run.'))+'</dl>':'';
   const controls=allowRepair && lane==='blocked' && !row.responseId &&
     ['blocked','failed','needs work','needs changes','revision required'].includes(row.status)?
     '<div class="review-buttons repair-actions"><button type="button" data-edit-review="'+esc(row.id)+'" data-fix-review>Fix and resubmit</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div>':'';
-  const timestamp=verified?'<p class="workspace-meta">Verified '+date(row.verifiedAt)+'</p>':'';
+  const manual=lane==='manual';
+  const next=paused && ['queued','publishing'].includes(lane)?'On resume, Orbital checks the recorded action.':({queued:'Orbital checks the approved action and its destination.',publishing:'Orbital verifies the result against the approved action.',manual:'The owner can use the reviewed material manually.',published:'Complete.'})[lane];
+  const timestamp=verified || manual?'<p class="workspace-meta">Verified '+date(row.verifiedAt)+'</p>':'';
   return '<article class="workspace-card panel release-card" data-release-id="'+esc(row.id)+'"><h3>'+esc(row.title || row.id)+'</h3>'+
     (project?'<p class="release-project">'+esc(project)+'</p>':'')+'<p>'+esc(reviewOutcome(row))+'</p>'+
-    '<p class="release-state release-state-'+lane+'">'+esc(status)+'</p>'+timestamp+
+    '<p class="release-state release-state-'+lane+'">'+esc(status)+'</p>'+timestamp+(next?'<dl>'+caption('Next action',next)+'</dl>':'')+(!verified && !manual?'<p>'+esc(waitAge(timeline.filter(t=>t.reviewId===row.id),now))+'</p>':'')+
     (row.releaseProgress && lane!=='blocked'?'<p>'+esc(row.releaseProgress)+'</p>':'')+facts+
     '<details><summary>Scope, tests and evidence</summary><dl class="workspace-fields">'+reviewFacts(row)+'</dl>'+
     artifactLink(row.diffUrl || row.evidenceUrl || row.artifactUrl || list(row.sources)[0]?.url,'Open reviewed evidence')+'</details>'+
-    (result?'<div class="wait-links">'+result+'</div>':'')+controls+'</article>';
+    (manual?list(row.sources).map(item=>artifactLink(item.url,item.label || 'Reviewed material')).join(''):'')+(result?'<div class="wait-links">'+result+'</div>':'')+controls+'</article>';
 }
-function releaseGroups(reviews,sectors,allowRepair) {
+function releaseGroups(reviews,sectors,allowRepair,timeline,now,center) {
   const groups=[['blocked','Blocked or needs work','Resolve the blocker or request a revision. Changed work returns for your approval.'],
     ['queued','Approved and queued','Approved work waiting for the hourly coordinator. It has not been confirmed as pushed.'],
     ['publishing','Publishing or awaiting verification','A push may be in progress or recorded, but verified completion is still pending.'],
+    ['manual','Completed reviews · manual use','The approved review is complete. Open its evidence for manual use.'],
     ['published','Published and verified','Recorded completion with a verification timestamp and a result link. A verified pull request does not mean production was deployed.']];
   return groups.map(([key,title,description])=>{
     const rows=reviews.filter(r=>releaseLane(r)===key && !(r.responseId && reviews.some(c=>c.revisionOfResponseId===r.responseId)));
-    return '<section class="release-group release-group-'+key+'" aria-labelledby="release-heading-'+key+'"><header><h2 id="release-heading-'+key+'">'+title+'</h2><span class="release-count">'+rows.length+'</span></header><p class="release-help">'+description+'</p>'+
+    const collapsible=key==='published';
+    return '<section class="release-group release-group-'+key+'" aria-labelledby="release-heading-'+key+'">'+(collapsible?'<details class="release-fold"><summary>':'<header>')+'<h2 id="release-heading-'+key+'">'+title+'</h2><span class="release-count">'+rows.length+'</span>'+(collapsible?'</summary>':'</header>')+'<p class="release-help">'+description+'</p>'+
       (rows.length?'<div class="release-list">'+rows.map(r=>{
         const p=sectors.find(s=>s.id===(r.project || r.projectId) || s.name===(r.project || r.projectId));
-        return '<details class="release-item" data-decision-key="review/'+esc(r.id)+'"><summary><span>'+esc(r.title || r.id)+'</span><small>'+esc(p?.name || r.projectName || r.project || r.projectId || 'Project unrecorded')+'</small></summary>'+releaseDescription(r,{allowRepair,project:p?.name || r.projectName || r.project || r.projectId})+'</details>';
-      }).join('')+'</div>':empty('No items in this section.'))+'</section>';
+        return '<details class="release-item" data-decision-key="review/'+esc(r.id)+'"><summary><span>'+esc(r.title || r.id)+'</span><small>'+esc(p?.name || r.projectName || r.project || r.projectId || 'Project unrecorded')+'</small></summary>'+releaseDescription(r,{allowRepair,timeline,now,paused:center?.workflowControl?.paused || center?.sectorControls?.[r.project]?.paused,project:p?.name || r.projectName || r.project || r.projectId})+'</details>';
+      }).join('')+'</div>':empty('No items in this section.'))+(collapsible?'</details>':'')+'</section>';
   }).join('');
 }
 function decisionInbox(sectors, records, waiting) {
@@ -404,20 +410,20 @@ function decisionInbox(sectors, records, waiting) {
   // Keep the recorded order within each project, including after a refresh.
   return [...entries.values()].sort((a,b)=>a.order-b.order);
 }
-function decisionList(rows, allowApproval) {
-  if (!rows.length) return empty('No decisions need your input.');
+function decisionList(rows, allowApproval, timeline=[], now=Date.now()) {
+  if (!rows.length) return empty('No decisions in this list.');
   const entries = rows.map((row,i) => {
     const body = row.record ? reviewFacts(row.record) + caption('Revises review',row.revisionOf) : caption('Requested action',row.action) + caption('Destination',row.destination) +
       caption('Proposed output',row.output) + caption('Revises review',row.revisionOf) + caption('Review notes',row.notes) + caption('Verification',row.test) + caption('After your decision',row.next);
     const links = artifactLink(row.evidence,'Review evidence') + artifactLink(row.register,'Open review entry');
     const action = allowApproval && row.canRespond ? '<div class="approval-actions"><div class="review-buttons">'+
-      (row.canApprove ? '<button type="button" data-approve-review="'+esc(row.id)+'">Approve and queue push</button>' : '') +
-      '<button type="button" class="review-edit" data-edit-review="'+esc(row.id)+'">Edit / request changes</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div><p>Approvals and requested revisions run at the next hourly check. Revisions return for your approval before publishing.</p></div>' : '';
+      (row.canApprove ? '<button type="button" data-approve-review="'+esc(row.id)+'">'+(row.record?.pushReady===false || /manual(ly)?|no external write/i.test(row.action)?'Accept for manual use':'Approve requested action')+'</button>' : '') +
+      '<button type="button" class="review-edit" data-edit-review="'+esc(row.id)+'">Edit / request changes</button><button type="button" class="review-deny" data-deny-review="'+esc(row.id)+'">Deny</button></div><p>Review this revision and choose whether to authorize the recorded action.</p></div>' : '';
     return '<li><details name="owner-decisions" data-decision-key="'+esc(row.key)+'"><summary>' +
       '<span class="decision-number" aria-hidden="true">'+(i+1)+'</span><span class="decision-title">'+esc(row.title)+(row.outcome && row.outcome!==row.title ? '<small class="review-outcome">'+esc(row.outcome)+'</small>' : '')+'</span>' +
       '<span class="decision-project">'+esc(row.project)+'</span><span class="decision-toggle" aria-hidden="true"></span></summary>' +
       '<div class="decision-detail"><p class="decision-ref">Review ID <strong>'+esc(row.id)+'</strong></p>' +
-      (body ? '<dl>'+body+'</dl>' : '') + (links ? '<div class="decision-links">'+links+'</div>' : '') + action + '</div></details></li>';
+      (body ? '<dl>'+body+'</dl>' : '') + (links ? '<div class="decision-links">'+links+'</div>' : '') + '<p>'+esc(waitAge(timeline.filter(t=>t.reviewId===row.id),now))+'</p>' + action + '</div></details></li>';
   });
   return '<p class="decision-total">'+rows.length+' pending '+(rows.length===1?'decision':'decisions')+'</p>' +
     '<ol role="list" class="decision-list" aria-label="Pending decisions">'+entries.join('')+'</ol>';
@@ -428,6 +434,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
   const plans = sectors.map(a => sectorPlan(a,Number(now)));
   const waiting = plans.flat().filter(i => i.lane === 'Waiting');
   const ledger = snapshot?.commandCenter?.execution;
+  const timeline=observedTransitions(snapshot);
   const reviewed = list(ledger?.releaseReviews).filter(row => evaluationPassed(ledger,row));
   const decisions = decisionInbox(sectors,reviewed,ledger?.evaluationGate ? [] : waiting);
   // The sidebar only needs the count. Build each screen on its first visit
@@ -465,11 +472,13 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       });
       const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);
       const revisions = responses.filter(receipt => receipt.decision === 'revise').map(receipt => ({
-        receipt, original: releases.find(row => row.id === receipt.reviewId), revised: revisedReview(receipt,releases)
+        receipt, original: releases.find(row => row.id === receipt.reviewId), revised: revisedReview(receipt,releases),
+        evaluating: !!revisedReview(receipt,ledger.releaseReviews) && !revisedReview(receipt,releases)
       }));
       const superseded = new Set(revisions.filter(item => item.revised).map(item => item.receipt.reviewId));
-      const progress=releaseGroups(releases.filter(row => !superseded.has(row.id)),sectors,allowSkip);
-      const resolved = item => item.revised && (verifiedRelease(item.revised) || releaseLane(item.revised) === 'archive');
+      const progress=releaseGroups(releases.filter(row => !superseded.has(row.id)),sectors,allowSkip,timeline,now,snapshot.commandCenter);
+      const direct=decisions.filter(d=>!revisions.some(item=>item.revised?.id===d.id));
+      const resolved = item => item.revised && (['manual','published','archive'].includes(releaseLane(item.revised)));
       const groups = [
         ['Requested revisions', revisions.filter(item => !item.revised)],
         ['Revisions prepared', revisions.filter(item => item.revised && !resolved(item))],
@@ -480,21 +489,25 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       ];
       const responseHistory = groups.map(([title,rows])=>{
         if(!rows.length)return '';
-        return '<details class="release-progress response-history"><summary>'+title+' ('+rows.length+')</summary><ul>'+rows.map(({receipt,original,revised})=>{
+        return '<details class="release-progress response-history"><summary>'+title+' ('+rows.length+')</summary><ul>'+rows.map(({receipt,original,revised,evaluating})=>{
           const outcome = revised ? (verifiedRelease(revised) ? 'Repair published and verified' : 'Revised result: '+text(revised.status)) :
-            receipt.decision === 'deny' ? 'Declined by you' : original?.releaseError ? 'Repair blocked' : 'Awaiting repair';
-          return '<li><h3>'+esc(receipt.review?.title || receipt.reviewId)+'</h3>'+date(receipt)+
+            evaluating ? 'Awaiting evaluation of the revised work' : receipt.decision === 'deny' ? 'Declined by you' : original?.releaseError ? 'Repair blocked' : 'Awaiting repair';
+          const deniedDetail=receipt.decision==='deny';
+          const head=deniedDetail?'<details data-decision-key="review/'+esc(receipt.reviewId)+'"><summary>'+esc(receipt.review?.title || receipt.reviewId)+'</summary>':'';
+          return '<li>'+head+'<h3>'+esc(receipt.review?.title || receipt.reviewId)+'</h3>'+date(receipt.at)+
             '<p><strong>'+esc(outcome)+'</strong></p><p>'+esc(revised?.releaseProgress || original?.releaseProgress || '')+'</p>'+
-            (revised?'<a class="thread" href="#needs/'+encodeURIComponent('review/'+revised.id)+'">Open revised result '+esc(revised.id)+'</a>':
+            (revised?((decisions.some(d=>d.id===revised.id) ? decisionList(decisions.filter(d=>d.id===revised.id),allowSkip,timeline,now) :
+              '<p>'+esc(reviewOutcome(revised))+'</p>'+artifactLink(revised.evidenceUrl,'Review evidence'))+
+              '<a class="thread" href="#needs/'+encodeURIComponent('review/'+revised.id)+'">Open revised result '+esc(revised.id)+'</a>'):
               '<dl>'+caption('What is needed',original?.releaseError || original?.waitingDetails?.needed)+
               caption('Next step',original?.repairAction || original?.waitingDetails?.nextAction)+'</dl>')+
             (receipt.editedOutput?'<h4>Your edited output</h4><p class="review-copy">'+esc(receipt.editedOutput)+'</p>':'')+
-            (receipt.instructions?'<h4>Your instructions</h4><p class="review-copy">'+esc(receipt.instructions)+'</p>':'')+'</li>';
+            (receipt.instructions?'<h4>Your instructions</h4><p class="review-copy">'+esc(receipt.instructions)+'</p>':'')+(deniedDetail?'</details>':'')+'</li>';
         }).join('')+'</ul></details>';
       }).join('');
-      return decisionsHtml = '<section class="release-group release-group-pending"><header><h2>Awaiting your approval</h2><span class="release-count">'+decisions.length+'</span></header>'+decisionList(decisions,allowSkip)+'</section>'+progress+responseHistory;
+      return decisionsHtml = '<section class="release-group release-group-pending"><header><h2>Awaiting your approval</h2><span class="release-count">'+direct.length+'</span></header>'+decisionList(direct,allowSkip,timeline,now)+'</section>'+progress+responseHistory;
     },
-    get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions); },
+    get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions,timeline,now); },
     count:decisions.length,
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };

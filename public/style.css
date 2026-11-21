@@ -606,3 +606,7 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 
 .evaluation-route {text-align:center;padding:.75rem;line-height:1.6;color:#e1edf0;background:#203847}.evaluation-route a {color:#a0ead8}.evaluation-route span {padding-inline:.4em}
 .tower-floor[hidden],.evaluation-route[hidden] {display:none}
+
+.release-fold > summary { display:flex; align-items:center; gap:.7rem; cursor:pointer; }
+.release-fold > summary::before { content:"▸"; }
+.release-fold[open] > summary::before { content:"▾"; }
