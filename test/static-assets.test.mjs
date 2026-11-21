@@ -11,7 +11,7 @@ test('the built Worker revalidates static bytes and keeps owner routes private',
   const root = await mkdtemp(join(tmpdir(),'orbital-assets-'));
   t.after(() => rm(root,{recursive:true,force:true}));
   for (const dir of ['public','scripts','examples','.openai']) await mkdir(join(root,dir));
-  for (const name of ['src','scripts/build.mjs','public/skip.js','package.json']) {
+  for (const name of ['src','scripts/build.mjs','public/skip.js','public/evaluation.js','package.json']) {
     await cp(new URL('../'+name,import.meta.url),join(root,name),{recursive:true});
   }
   const names = ['Professional','Product Design','Personal Dashboard','Personal Website','Financial Advice'];

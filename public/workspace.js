@@ -1,3 +1,4 @@
+import { evaluationPassed } from './evaluation.js';
 import { canSkip, skipSlots } from './skip.js';
 import { workerName, workerMentions } from './worker-roster.js';
 // Read-only projections of the owner snapshot. Only recorded, displayable fields cross into markup.
@@ -426,7 +427,9 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
   const activeKind = Object.hasOwn(kinds,kind) ? kind : 'all';
   const plans = sectors.map(a => sectorPlan(a,Number(now)));
   const waiting = plans.flat().filter(i => i.lane === 'Waiting');
-  const decisions = decisionInbox(sectors,snapshot?.commandCenter?.execution?.releaseReviews,waiting);
+  const ledger = snapshot?.commandCenter?.execution;
+  const reviewed = list(ledger?.releaseReviews).filter(row => evaluationPassed(ledger,row));
+  const decisions = decisionInbox(sectors,reviewed,ledger?.evaluationGate ? [] : waiting);
   // The sidebar only needs the count. Build each screen on its first visit
   // and reuse it for the lifetime of this snapshot and filter selection.
   let historyHtml, roadmapHtml, decisionsHtml, waitingHtml;
@@ -457,6 +460,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       if (decisionsHtml !== undefined) return decisionsHtml;
       const releases=list(snapshot?.commandCenter?.execution?.releaseReviews).filter(r=>{
         const approver=text(r.ownerDecision?.approver || r.approval?.approver || r.approver || r.decisionOwner);
+        if (ledger?.evaluationGate && !r.approvalId && !r.responseId && ['pending','blocked'].includes(releaseLane(r)) && !evaluationPassed(ledger,r)) return false;
         return !stationProject(r) && r.approvalRequired!==false && r.releaseMode!=='automatic' && (!approver || /^(brian( uong)?|owner)$/i.test(approver));
       });
       const responses = list(snapshot?.commandCenter?.execution?.ownerReviewResponses);

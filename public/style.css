@@ -593,3 +593,13 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .sector-status.is-paused{color:#eed49b}
 .sector-control-note{color:var(--muted,#b9cbd7);font-size:.9rem;line-height:1.6;margin:.8rem 0 1.5rem;max-width:65ch}
 @media(max-width:600px){.sector-control{width:100%;justify-content:space-between}.sector-heading{align-items:flex-start}}
+
+.chat-hierarchy {margin:1rem;padding:1rem;border:1px solid #537281;background:#152a36;color:#eee;border-radius:.75rem;text-align:center}
+.chat-hierarchy h3,.chat-hierarchy h4 {margin:.25rem 0 .65rem}
+.chat-folders {display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,9rem),1fr));gap:.6rem;margin:1rem 0}
+.chat-folder {border-top:2px solid #74b7be;background:#203947;padding:.7rem;text-align:left;overflow-wrap:anywhere}
+.chat-folder a,.chat-folder strong,.chat-folder small {display:block}
+.chat-folder a {color:#a8e6db;text-decoration:underline}
+.chat-folder small {margin:.15rem 0 .65rem;line-height:1.4}
+.chat-folder .chat-status {color:#f6ce97}
+.chat-hierarchy p {margin:.35rem auto 0;max-width:50ch}

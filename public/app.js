@@ -1,5 +1,6 @@
 import { ownerSkip } from './skip.js';
 import { workspaceViews } from './workspace.js';
+import { renderConversations } from './conversations.js';
 import { mountTower } from './tower.js';
 import { buildTowerFloors } from './roster.js';
 import { workerMentions } from './worker-roster.js';
@@ -239,6 +240,7 @@ function renderWorkViews(view) {
   else if(destinations[view])markup($(destinations[view]),data[view]);
 }
 function render(purge=false) {
+  renderConversations($('chatHierarchy'),privateView() ? state.snapshot : null);
   const view=locationParts().view;
   const requested=locationParts().id;
   if (requested && state.agents.some(a=>a.id===requested))state.id=requested;

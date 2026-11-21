@@ -39,13 +39,14 @@ assets['/sync-guide'] = {body:await read('SYNC.md'), type:'text/plain; charset=u
 const sources = await read('src/sources.js');
 const api = (await read('src/api.js')).replace(/^import [^\n]*from '\.\/sources\.js';\r?\n/m,'');
 const skip = await read('public/skip.js');
+const evaluation = await read('public/evaluation.js');
 const sector = (await read('src/project-state.js')).replace(/^import [^\n]*from '\.\/api\.js';\r?\n/m,'');
 const projectState = sector.replace(/^import [^\n]*from '\.\.\/public\/skip\.js';\r?\n/m,'');
 const worker = await read('src/worker.js');
 const serverDir = join(root, 'dist', 'server');
 const metadataDir = join(root, 'dist', '.openai');
 await Promise.all([mkdir(serverDir,{recursive:true}), mkdir(metadataDir,{recursive:true})]);
-await writeFile(join(serverDir,'index.js'), [sources, api, skip, projectState, 'const sectorSeed = '+JSON.stringify(seed)+';',
+await writeFile(join(serverDir,'index.js'), [sources, api, skip, evaluation, projectState.replace("import { evaluationPassed } from '../public/evaluation.js';",''), 'const sectorSeed = '+JSON.stringify(seed)+';',
   'const siteAssets = '+JSON.stringify(assets)+';', worker].join('\n'));
 const manifest = process.env.ORBIT_HOSTING_MANIFEST || join(root, 'examples', 'hosting.json');
 await copyFile(manifest, join(metadataDir, 'hosting.json'));

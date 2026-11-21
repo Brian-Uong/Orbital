@@ -17,3 +17,11 @@ The published owner workspace keeps its operational feed, coordinator link, and 
 ## Releases
 
 Station updates publish automatically. Each published version is mirrored here. The release commit records the Sites version and hosted source commit. Public examples and deployment templates stay independent of the owner workspace.
+
+## How a project result reaches the owner
+
+Orbital is the hourly coordinator. The signed-in Command view maps each project to its original conversations. A recorded folder name can appear before its destination has been verified. The coordinator claims one assignment, checks the destination, sends it to the original chat and records the accepted message. History credits a result after reading the reply and checking its evidence. Interactive delivery and unattended cloud delivery have separate receipts.
+
+Before a project result reaches Needs Brian, the evaluator checks the exact revision against its original requirements. Failed checks return to the producing chat. A corrected artifact needs another check. A pass makes a revision eligible for owner review. Owner approval queues only the recorded action and destination. History distinguishes that approval, a remote commit or pull request, and verified production behavior.
+
+Global Pause holds project work and releases. Individual project controls can hold one sector independently. Tested station maintenance follows the coordinator’s direct release path. The public view contains only coarse project status. Chat destinations, evaluation evidence, owner decisions and live records belong in private state.

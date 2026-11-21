@@ -1,3 +1,4 @@
+import { evaluationPassed } from '../public/evaluation.js';
 import { canSkip, skipSlots, ownerSkip } from '../public/skip.js';
 import {isStationOwner, ApiError, json, bodyOf, matchesKey, conditionalUpdate} from './api.js';
 
@@ -251,7 +252,7 @@ export async function handleProjectState(request, env, seed) {
           if (prior) return {result:{responseId:prior.id,applied:false}};
           if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
           const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
-          if (!review || JSON.stringify(review) !== intent.expectedReview || review.responseId ||
+          if (!review || !evaluationPassed(ledger,review) || JSON.stringify(review) !== intent.expectedReview || review.responseId ||
               !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review','blocked','failed','needs work','needs changes','revision required'].includes(review.status)) {
             throw new ApiError(409,'This idea is no longer awaiting a decision or repair request.');
           }
@@ -268,7 +269,7 @@ export async function handleProjectState(request, env, seed) {
         if (prior) return {result:{approvalId:prior.id,applied:false}};
         if (expected !== stateTag(current,'owner')) throw new ApiError(412,'The review changed. Refresh and review it again.');
         const review = ledger.releaseReviews?.find(r => r.id === intent.reviewId);
-        if (!review || review.responseId || JSON.stringify(review) !== intent.expectedReview || !review.action || !review.destination ||
+        if (!review || !evaluationPassed(ledger,review) || review.responseId || JSON.stringify(review) !== intent.expectedReview || !review.action || !review.destination ||
             !['awaiting owner approval','needs brian','pending approval','awaiting approval','ready for review'].includes(review.status)) {
           throw new ApiError(409,'This release is no longer awaiting your approval.');
         }
@@ -294,6 +295,16 @@ export async function handleProjectState(request, env, seed) {
         throw new ApiError(409, 'Snapshot is older than, or conflicts with, the current revision.');
       }
       preserveDecisions(current, incoming, service);
+      const oldLedger = current.commandCenter.execution || {};
+      const nextLedger = incoming.commandCenter.execution || {};
+      if (oldLedger.evaluationGate && !nextLedger.evaluationGate ||
+          !service && ['evaluationGate','evaluationReceipts'].some(k => JSON.stringify(oldLedger[k]) !== JSON.stringify(nextLedger[k]))) {
+        throw new ApiError(409,'Preserve the private evaluation policy and receipts.');
+      }
+      if ((oldLedger.evaluationReceipts || []).some((record,i) =>
+          JSON.stringify(record) !== JSON.stringify(nextLedger.evaluationReceipts?.[i]))) {
+        throw new ApiError(409,'Keep evaluation receipts in their original order.');
+      }
       if (JSON.stringify(current.commandCenter.workflowControl) !== JSON.stringify(incoming.commandCenter.workflowControl)) {
         throw new ApiError(409,'Preserve the owner workflow setting. Use Pause or Resume to change it.');
       }
