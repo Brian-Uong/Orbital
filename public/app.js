@@ -1,5 +1,5 @@
 import { ownerSkip } from './skip.js';
-import { workspaceViews } from './workspace.js';
+import { workspaceViews, reviewLocation, discloseReview } from './workspace.js';
 import { conversationFloors } from './conversations.js';
 import { mountTower } from './tower.js';
 import { buildTowerFloors } from './roster.js';
@@ -63,9 +63,7 @@ function openHub(){
   const station=mountTower({selectProject:select,dateText,onRouteChange:route});
 const ownerPages=['history','needs','roadmap'];
 function locationParts() {
-  const [view,rawId]=location.hash.slice(1).split('/');
-  let id;
-  try {id=decodeURIComponent(rawId||'');} catch {id='';}
+  const {view,id}=reviewLocation(location.hash);
   return {view:(['overview','agents','activity'].includes(view) || privateView() && ownerPages.includes(view))?view:'overview',id};
 }
 function select(id) {
@@ -366,10 +364,7 @@ function route(event) {
     [...$('needsBody').querySelectorAll('details[data-decision-key]')].find(row=>row.dataset.decisionKey===decisionKey);
   if(targetDecision){
     linkedDecision=decisionKey;
-    for(let node=targetDecision;node;node=node.parentElement?.closest('details')) node.open=true;
-    const summary=targetDecision.querySelector('summary');
-    summary.focus({preventScroll:true});
-    summary.scrollIntoView({block:'nearest'});
+    discloseReview(targetDecision);
   } else if(event?.type==='hashchange' && ownerPages.includes(view)){
     const heading=$(view+'View').querySelector('h2')||$('pageTitle');
     heading.setAttribute('tabindex','-1');heading.focus({preventScroll:true});

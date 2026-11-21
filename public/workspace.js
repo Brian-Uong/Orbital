@@ -512,3 +512,18 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
 }
+
+
+export function reviewLocation(hash) {
+  const [view, ...parts] = hash.slice(1).split('/');
+  const raw = view === 'needs' ? parts.join('/') : parts[0] || '';
+  try { return {view, id:decodeURIComponent(raw)}; }
+  catch { return {view, id:''}; }
+}
+
+export function discloseReview(target) {
+  for (let node=target; node; node=node.parentElement?.closest('details')) node.open=true;
+  const summary=target.querySelector('summary');
+  summary.focus({preventScroll:true});
+  summary.scrollIntoView({block:'nearest'});
+}

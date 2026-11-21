@@ -54,7 +54,17 @@ export function windowMetrics(snapshot, start, end) {
   const all=observedTransitions(snapshot).filter(e=>Date.parse(e.at)<Date.parse(end));
   const events=all.filter(e=>Date.parse(e.at)>=Date.parse(start));
   function pairs(from,to,match) {
-    const starts=events.filter(e=>e.stage===from), stops=events.filter(e=>e.stage===to);
+    const starts=events.filter(e=>e.stage===from);
+    const seen=new Set();
+    const stops=all.filter(event=>{
+      if (event.stage!==to) return false;
+      if (to==='handoff') {
+        const key=JSON.stringify([event.project,event.tag]);
+        if (seen.has(key)) return false;
+        seen.add(key);
+      }
+      return Date.parse(event.at)>=Date.parse(start);
+    });
     const durations=[], byKind={};
     let open=0;
     for (const a of starts) {
