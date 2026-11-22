@@ -610,3 +610,24 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .release-fold > summary { display:flex; align-items:center; gap:.7rem; cursor:pointer; }
 .release-fold > summary::before { content:"▸"; }
 .release-fold[open] > summary::before { content:"▾"; }
+
+
+/* Opaque review surfaces keep the moving city behind readable content. */
+#needsBody{--ink:#edf5fc;--muted:#bdcfde;--line:#506b82;color:var(--ink)}
+#needsBody .release-group,#needsBody .response-history{background:#172d42;border:1px solid #506b82;border-radius:16px;padding:clamp(1rem,2.4vw,1.6rem);box-shadow:0 8px 24px rgb(5 15 25 / .18)}
+#needsBody .release-group>header{gap:.8rem;flex-wrap:wrap}
+#needsBody .release-help{margin:.8rem 0 1.1rem}
+#needsBody .release-count{background:#304c63;color:#edf5fc;border-color:#68849a;flex:none}
+#needsBody .release-item{background:#203b52;border-color:#58758c}
+#needsBody .release-item>summary{background:#203b52;gap:.75rem}
+#needsBody .release-item>summary:hover,#needsBody .release-fold>summary:hover,#needsBody .response-history>summary:hover{background:#2b4960}
+#needsBody .release-item[open]>summary{background:#2a465e;border-bottom:1px solid #58758c}
+#needsBody .release-card{background:#192f44;box-shadow:none;backdrop-filter:none}
+#needsBody .response-history>summary{background:#203b52;border-color:#58758c}
+#needsBody .response-history li{background:#192f44;border-color:#506b82}
+#needsBody .release-fold>summary{min-height:52px;padding:.75rem .9rem;background:#203b52;border:1px solid #58758c;border-radius:10px;display:flex;align-items:center;gap:.8rem;list-style:none}
+#needsBody .release-fold>summary::-webkit-details-marker{display:none}
+#needsBody .release-fold>summary h2{flex:1;min-width:0;line-height:1.4;overflow-wrap:anywhere}
+#needsBody .release-fold>summary::before{content:"";width:.55rem;height:.55rem;flex:none;border-right:2px solid #bce5df;border-bottom:2px solid #bce5df;transform:rotate(-45deg);margin-right:.2rem}
+#needsBody .release-fold[open]>summary::before{content:"";transform:rotate(45deg);margin-top:-.25rem}
+#needsBody .release-fold>summary:focus-visible,#needsBody .release-item>summary:focus-visible,#needsBody .response-history>summary:focus-visible{outline:3px solid #b3f1e2;outline-offset:-3px}

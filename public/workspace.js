@@ -360,7 +360,7 @@ function releaseGroups(reviews,sectors,allowRepair,timeline,now,center) {
     ['published','Published and verified','Recorded completion with a verification timestamp and a result link. A verified pull request does not mean production was deployed.']];
   return groups.map(([key,title,description])=>{
     const rows=reviews.filter(r=>releaseLane(r)===key && !(r.responseId && reviews.some(c=>c.revisionOfResponseId===r.responseId)));
-    const collapsible=key==='published';
+    const collapsible=key==='published' || key==='manual';
     return '<section class="release-group release-group-'+key+'" aria-labelledby="release-heading-'+key+'">'+(collapsible?'<details class="release-fold"><summary>':'<header>')+'<h2 id="release-heading-'+key+'">'+title+'</h2><span class="release-count">'+rows.length+'</span>'+(collapsible?'</summary>':'</header>')+'<p class="release-help">'+description+'</p>'+
       (rows.length?'<div class="release-list">'+rows.map(r=>{
         const p=sectors.find(s=>s.id===(r.project || r.projectId) || s.name===(r.project || r.projectId));
@@ -527,3 +527,4 @@ export function discloseReview(target) {
   summary.focus({preventScroll:true});
   summary.scrollIntoView({block:'nearest'});
 }
+
