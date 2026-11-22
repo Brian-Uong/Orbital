@@ -489,7 +489,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       ];
       const responseHistory = groups.map(([title,rows])=>{
         if(!rows.length)return '';
-        return '<details class="release-progress response-history"><summary>'+title+' ('+rows.length+')</summary><ul>'+rows.map(({receipt,original,revised,evaluating})=>{
+        return '<details class="release-progress response-history"><summary><h2>'+title+'</h2><span class="release-count">'+rows.length+'</span></summary><ul>'+rows.map(({receipt,original,revised,evaluating})=>{
           const outcome = revised ? (verifiedRelease(revised) ? 'Repair published and verified' : 'Revised result: '+text(revised.status)) :
             evaluating ? 'Awaiting evaluation of the revised work' : receipt.decision === 'deny' ? 'Declined by you' : original?.releaseError ? 'Repair blocked' : 'Awaiting repair';
           const deniedDetail=receipt.decision==='deny';
@@ -527,4 +527,5 @@ export function discloseReview(target) {
   summary.focus({preventScroll:true});
   summary.scrollIntoView({block:'nearest'});
 }
+
 

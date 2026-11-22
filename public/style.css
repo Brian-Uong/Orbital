@@ -612,22 +612,25 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 .release-fold[open] > summary::before { content:"▾"; }
 
 
-/* Opaque review surfaces keep the moving city behind readable content. */
-#needsBody{--ink:#edf5fc;--muted:#bdcfde;--line:#506b82;color:var(--ink)}
-#needsBody .release-group,#needsBody .response-history{background:#172d42;border:1px solid #506b82;border-radius:16px;padding:clamp(1rem,2.4vw,1.6rem);box-shadow:0 8px 24px rgb(5 15 25 / .18)}
+/* Consistent, opaque Needs Brian sections and disclosure rows. */
+#needsBody{--ink:#edf5fc;--muted:#bdcfde;--line:#506b82;color:var(--ink);display:grid;gap:1rem}
+#needsBody .release-group,#needsBody .response-history{margin:0;background:#172d42;border:1px solid #506b82;border-radius:12px;padding:1.2rem;box-shadow:none;min-width:0}
 #needsBody .release-group>header{gap:.8rem;flex-wrap:wrap}
+#needsBody .release-group h2,#needsBody .response-history>summary h2{margin:0;font-size:1.1rem;font-weight:650;line-height:1.45;letter-spacing:normal;min-width:0;overflow-wrap:anywhere}
 #needsBody .release-help{margin:.8rem 0 1.1rem}
-#needsBody .release-count{background:#304c63;color:#edf5fc;border-color:#68849a;flex:none}
+#needsBody .release-count{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;height:2rem;padding:0 .55rem;background:#304c63;color:#edf5fc;border:1px solid #68849a;border-radius:999px;font-size:.9rem;font-weight:500;line-height:1;font-variant-numeric:tabular-nums;flex:none}
 #needsBody .release-item{background:#203b52;border-color:#58758c}
 #needsBody .release-item>summary{background:#203b52;gap:.75rem}
-#needsBody .release-item>summary:hover,#needsBody .release-fold>summary:hover,#needsBody .response-history>summary:hover{background:#2b4960}
+#needsBody .release-item>summary:hover,#needsBody :is(.release-fold,.response-history)>summary:hover{background:#2b4960}
 #needsBody .release-item[open]>summary{background:#2a465e;border-bottom:1px solid #58758c}
 #needsBody .release-card{background:#192f44;box-shadow:none;backdrop-filter:none}
-#needsBody .response-history>summary{background:#203b52;border-color:#58758c}
 #needsBody .response-history li{background:#192f44;border-color:#506b82}
-#needsBody .release-fold>summary{min-height:52px;padding:.75rem .9rem;background:#203b52;border:1px solid #58758c;border-radius:10px;display:flex;align-items:center;gap:.8rem;list-style:none}
-#needsBody .release-fold>summary::-webkit-details-marker{display:none}
-#needsBody .release-fold>summary h2{flex:1;min-width:0;line-height:1.4;overflow-wrap:anywhere}
-#needsBody .release-fold>summary::before{content:"";width:.55rem;height:.55rem;flex:none;border-right:2px solid #bce5df;border-bottom:2px solid #bce5df;transform:rotate(-45deg);margin-right:.2rem}
-#needsBody .release-fold[open]>summary::before{content:"";transform:rotate(45deg);margin-top:-.25rem}
-#needsBody .release-fold>summary:focus-visible,#needsBody .release-item>summary:focus-visible,#needsBody .response-history>summary:focus-visible{outline:3px solid #b3f1e2;outline-offset:-3px}
+#needsBody .release-group:has(>.release-fold),#needsBody .response-history{padding:0;overflow:hidden}
+#needsBody :is(.release-fold,.response-history)>summary{min-height:68px;padding:1rem 1.2rem;background:#203b52;border:0;border-radius:0;display:grid;grid-template-columns:.65rem minmax(0,1fr) auto;align-items:center;gap:.9rem;list-style:none;cursor:pointer;font-size:1.1rem}
+#needsBody :is(.release-fold,.response-history)>summary::-webkit-details-marker{display:none}
+#needsBody :is(.release-fold,.response-history)>summary::before{content:"";width:.5rem;height:.5rem;border-right:2px solid #bce5df;border-bottom:2px solid #bce5df;transform:rotate(-45deg);margin:0}
+#needsBody :is(.release-fold,.response-history)[open]>summary::before{content:"";transform:rotate(45deg);margin-top:-.25rem}
+#needsBody :is(.release-fold,.response-history)[open]>summary{border-bottom:1px solid #506b82}
+#needsBody .release-fold>.release-help,#needsBody .release-fold>.release-list,#needsBody .release-fold>.workspace-empty,#needsBody .response-history>ul{margin:1.2rem}
+#needsBody :is(.release-fold,.release-item,.response-history)>summary:focus-visible{outline:3px solid #b3f1e2;outline-offset:-3px}
+@media(max-width:600px){#needsBody :is(.release-fold,.response-history)>summary{padding:1rem;gap:.7rem}#needsBody .release-group{padding:1rem}#needsBody .release-group:has(>.release-fold),#needsBody .response-history{padding:0}}

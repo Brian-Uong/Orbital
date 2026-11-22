@@ -23,9 +23,9 @@ function fixture() {
 test('repair requests show actual outcomes for current and linked legacy children', () => {
   const snapshot=fixture(), saved=JSON.stringify(snapshot);
   const view=workspaceViews(snapshot,{allowSkip:true}).decisions;
-  assert.match(view,/Requested revisions \(1\)/);
-  assert.match(view,/Revisions prepared \(1\)/);
-  assert.match(view,/Resolved revision requests \(2\)/);
+  assert.match(view,/Requested revisions<\/h2><span class="release-count">1<\/span>/);
+  assert.match(view,/Revisions prepared<\/h2><span class="release-count">1<\/span>/);
+  assert.match(view,/Resolved revision requests<\/h2><span class="release-count">2<\/span>/);
   assert.match(view,/Repair published and verified/);
   assert.match(view,/Revised result: denied/);
   assert.match(view,/Repair blocked/);
@@ -44,8 +44,8 @@ test('mismatched legacy links and unverified publication remain unresolved', () 
   rows.find(row=>row.id==='DONE/2').verifiedAt=null;
   rows.find(row=>row.id==='DENIED/2').revisesReviewId='UNRELATED';
   const view=workspaceViews(snapshot).decisions;
-  assert.match(view,/Requested revisions \(2\)/);
-  assert.match(view,/Revisions prepared \(2\)/);
+  assert.match(view,/Requested revisions<\/h2><span class="release-count">2<\/span>/);
+  assert.match(view,/Revisions prepared<\/h2><span class="release-count">2<\/span>/);
   assert.doesNotMatch(view,/Resolved revision requests/);
   assert.doesNotMatch(view,/Repair published and verified/);
 });
@@ -60,3 +60,4 @@ test('prepared decisions act once on the eligible child and disappear on access 
   const held=workspaceViews(snapshot,{allowSkip:true}).decisions;
   assert.match(held,/Awaiting evaluation/);assert.doesNotMatch(held,/data-approve-review=/);
 });
+
