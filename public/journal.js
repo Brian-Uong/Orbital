@@ -75,8 +75,9 @@ export function journalGroups(rows, now = Date.now()) {
 export function journalMarkup(rows, now, renderEvents) {
   const groups = journalGroups(rows, now);
   const section = (label, entries) => entries.length ? '<h3>' + label + '</h3>' + renderEvents(entries) : '';
-  const previous = groups.previous.length ? '<details class="journal-archive"><summary>Previous days <span>' +
-    groups.previous.length + '</span></summary>' + renderEvents(groups.previous) + '</details>' : '';
+  const archived = [...groups.previous, ...groups.undated];
+  const previous = archived.length ? '<details class="journal-archive"><summary>Previous days <span>' +
+    archived.length + '</span></summary>' + renderEvents(archived) + '</details>' : '';
   return '<h3>Today</h3>' + (groups.today.length ? renderEvents(groups.today) : '<p class="empty">No activity recorded today.</p>') +
-    previous + section('Date unavailable', groups.undated) + section('Future-dated records', groups.future);
+    previous + section('Future-dated records', groups.future);
 }
