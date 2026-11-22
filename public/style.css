@@ -634,3 +634,10 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 #needsBody .release-fold>.release-help,#needsBody .release-fold>.release-list,#needsBody .release-fold>.workspace-empty,#needsBody .response-history>ul{margin:1.2rem}
 #needsBody :is(.release-fold,.release-item,.response-history)>summary:focus-visible{outline:3px solid #b3f1e2;outline-offset:-3px}
 @media(max-width:600px){#needsBody :is(.release-fold,.response-history)>summary{padding:1rem;gap:.7rem}#needsBody .release-group{padding:1rem}#needsBody .release-group:has(>.release-fold),#needsBody .response-history{padding:0}}
+
+#activity h3 { margin:1rem 1rem .45rem; font-size:.92rem; }
+#activity .event>div { min-width:0; overflow-wrap:anywhere; }
+.journal-archive { margin:.75rem; border:1px solid #506b82; border-radius:.6rem; overflow:hidden; }
+.journal-archive>summary { padding:.85rem 1rem; background:#203b52; color:#e8f2fb; cursor:pointer; font-weight:600; }
+.journal-archive>summary span { float:right; font-variant-numeric:tabular-nums; }
+.journal-archive>summary:focus-visible { outline:3px solid #b3f1e2; outline-offset:-3px; }

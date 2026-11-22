@@ -1,3 +1,4 @@
+import { journalEvents, journalMarkup, journalDay } from './journal.js';
 import { ownerSkip } from './skip.js';
 import { workspaceViews, reviewLocation, discloseReview } from './workspace.js';
 import { conversationFloors } from './conversations.js';
@@ -164,17 +165,29 @@ function report(r) {
     return '<details><summary>'+escape(a.name)+'</summary><div class="report-detail">'+field('Accomplished',item.accomplished)+field('Next assignment',item.next)+'</div></details>';
   }).join('')+'</article>';
 }
-function events(rows) {
+function events(rows, withLinks=false) {
   return rows.map(e=>{const a=state.agents.find(a=>a.id===e.agentId);
-    return '<article class="event"><div><small>'+escape(a?.name||'Control hub')+'</small>'+time(e.at)+'<strong>'+escape(displayWork(e.title))+'</strong></div></article>';}).join('')||empty('No recorded activity.');
+    let url;
+    if(withLinks && e.artifactUrl){try{const u=new URL(e.artifactUrl);if(u.protocol==='https:'&&!u.username&&!u.password)url=u.href;}catch{}}
+    return '<article class="event"><div><small>'+escape(a?.name||'Control hub')+'</small>'+time(e.at)+'<strong>'+escape(displayWork(e.title))+'</strong>'+link(url,'View result')+'</div></article>';}).join('')||empty('No recorded activity.');
 }
 function renderDirectory() {
   const term=$('agentSearch').value.trim().toLowerCase();
   roster($('directory'),state.agents.filter(a=>[a.name,a.task].some(v=>String(v??'').toLowerCase().includes(term))));
 }
+let lastJournalDay='';
 function renderJournal() {
   const id=$('agentFilter').value;
-  markup($('activity'),events(state.events.filter(e=>!id||e.agentId===id)));
+  const target=$('activity');
+  if(!privateView()){markup(target,empty('Activity is available in the owner workspace.'));return;}
+  const now=Date.now();
+  lastJournalDay=journalDay(now);
+  const old=target.querySelector('details');
+  const wasOpen=old?.open, focused=old?.querySelector('summary')===document.activeElement;
+  markup(target,journalMarkup(state.events.filter(e=>!id||e.agentId===id),now,rows=>events(rows,true)));
+  const archive=target.querySelector('details');
+  if(archive && wasOpen)archive.open=true;
+  if(archive && focused)archive.querySelector('summary').focus({preventScroll:true});
 }
 function connection() {
   $('notice').hidden=!issue;$('notice').textContent=issue;
@@ -280,10 +293,9 @@ function apply(raw) {
     if(!privateView())return {id:f.id,name:f.name,status:f.status,sourceType:'sector'};
     return sectors.get(f.id) || {id:f.id,name:f.name,status:f.status,workerProject:true};
   }).sort((a,b)=>rank(a)-rank(b)||a.name.localeCompare(b.name)||a.id.localeCompare(b.id));
-  const ids=new Set(state.agents.map(a=>a.id));
   state.reports=privateView() ? (data.reports||[]).filter(r=>r&&valid(r.at)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)) : [];
   state.center=privateView() ? data.commandCenter||{} : {};
-  state.events=privateView() ? data.events.filter(e=>e&&valid(e.at)&&(ids.has(e.agentId)||e.agentId===state.center.id)).sort((a,b)=>Date.parse(b.at)-Date.parse(a.at)) : [];
+  state.events=privateView() ? journalEvents(data) : [];
   state.at=data.updatedAt;lastText=raw;render();scheduleExpiry();
 }
 function saveBlob(blob,name){const href=URL.createObjectURL(blob),el=document.createElement('a');el.href=href;el.download=name;document.body.append(el);el.click();el.remove();setTimeout(()=>URL.revokeObjectURL(href),30000);}
@@ -314,6 +326,7 @@ async function refresh() {
   if(busy||document.hidden)return;
   busy=true;
   try {
+    if(privateView() && locationParts().view==='activity' && lastJournalDay!==journalDay(Date.now()))renderJournal();
     checkExpiry();
     if(watch){
       const handle=watch,raw=await readFile(await handle.getFile());
