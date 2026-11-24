@@ -97,9 +97,17 @@ export function renderOfficeScene(worker) {
   '<path d="M68 14h223v63H68z" fill="#203449" stroke="#95a9b0" stroke-width="2"/><path d="M71 17h217v57H71z" fill="#59748b"/><path d="M71 74V52h17V38h16v23h18V29h21v26h17V45h26v13h15V33h24v24h14V42h26v19h23v13z" fill="#314c64"/>'+
   '<path d="M94 44h3v4h-3zm36-9h3v4h-3zm0 10h3v4h-3zm80-6h4v4h-4zm0 9h4v4h-4zm39 1h3v4h-3zm-76 7h3v4h-3z" fill="#b6d5ce" opacity=".7"/><path d="M124 15v61m55-61v61m55-61v61M69 61h220" stroke="#8ca5b0" stroke-width="1.5"/><path d="M64 78h231" stroke="#c0c7bd" stroke-width="3"/>'+
   '<path d="M12 91h337" stroke="#bcc7c0" stroke-width="2"/><path d="M13 88h336" stroke="#91c5bd" opacity=".4"/>'+ '</svg>'+
+  '<svg class="room-lounge" width="100%" height="100%" viewBox="0 0 290 100" preserveAspectRatio="xMidYMax meet">'+
+  '<path d="m45 82 200-1 12 13H33z" fill="#82978f"/><path d="m44 87 197-1" stroke="#a6b5a8" stroke-width="2"/>'+
+  '<path d="M6 18h43v68H6z" fill="#9f8d79"/><path d="M10 22h35v59H10z" fill="#3c4d59"/><path d="M8 43h39M8 64h39" stroke="#baa68d" stroke-width="3"/><path d="M13 27h5v14h-5zm7 2h5v12h-5zm9-3 4-1 5 15-4 1z" fill="#e0c097"/><path d="M12 49h7v13h-7zm10 3h5v10h-5zm10-4h7v14h-7z" fill="#91b2b1"/><path d="M14 70h23v8H14z" fill="#bc947d"/><path d="M11 86v5m33-5v5" stroke="#293e4e" stroke-width="3"/>'+
+  '<rect x="75" y="48" width="134" height="31" rx="8" fill="#577b82"/><rect x="70" y="68" width="144" height="18" rx="5" fill="#759a99"/><path d="M74 59q-9 0-9 8v17h15V64q0-5-6-5zm136 0q9 0 9 8v17h-15V64q0-5 6-5z" fill="#8aabaa"/><path d="M81 85v6m120-6v6" stroke="#334552" stroke-width="4"/><path d="M140 51v29" stroke="#466c76" stroke-width="2"/><path d="m87 55 20-3 4 19-21 3z" fill="'+coats[coat]+'"/><path d="m176 54 18 3-3 16-18-3z" fill="#d1ba96"/>'+
+  '<ellipse cx="145" cy="85" rx="35" ry="6" fill="#c5af91"/><path d="M120 86v9m50-9v9" stroke="#354958" stroke-width="3"/><path d="M138 80h15v3h-15z" fill="#5f8290"/><path d="M156 78h5v5h-5z" fill="#e1d6bc"/>'+
+  '<path d="M247 71h23l-4 19h-15z" fill="#b59b80"/><path d="M258 74q-25-24-18-28 21 3 19 27-4-35 7-40 12 16-7 40 14-25 23-20-1 15-24 21" fill="#8db4a1"/>'+
+  '<path d="M85 15h47v23H85z" fill="#263e50" stroke="#97b3b7"/><path d="m90 32 9-9 10 5 15-8" fill="none" stroke="#d4c29b" stroke-width="2"/><path d="M155 17h38v3h-38zm4 5h30v2h-30z" fill="#afc5bf"/>'+
+  '</svg>'+
   '<svg class="rest-area" x="2%" y="0" width="38%" height="100%" viewBox="0 0 105 90" preserveAspectRatio="xMidYMax meet">'+
   '<path d="M6 73h91v8H6z" fill="#3b4c5b"/><path d="M9 61h78v14H9z" fill="#c6a47f"/><path d="M9 58h78v12H9z" fill="#d4ded1"/><path d="M9 49h5v31H9zm76 9h5v22h-5z" fill="#9b7e68"/><rect x="16" y="56" width="22" height="8" rx="4" fill="#edf0df"/><path d="M40 59h44v12H40z" fill="'+coats[coat]+'"/><path d="M42 67h39" stroke="#d4dfcf" opacity=".5"/>'+
-  '<g class="sleeping-worker"><circle cx="27" cy="56" r="6" fill="'+complexion+'"/><path d="M21 54q-1-8 8-5l4 4-8-1-2 4z" fill="#50434b"/><path d="m24 57 3 1" stroke="#534449" stroke-width="1"/><path class="sleep-blanket" d="M36 57q12-9 22 0h24v14H36z" fill="'+coats[coat]+'"/><path d="M40 61q14-4 22 2" fill="none" stroke="#d1dfd6" opacity=".5"/><g class="sleep-drift" fill="#c9e5dc" font-family="sans-serif" font-size="8"><text x="32" y="41">z</text><text x="40" y="33" font-size="6">z</text></g></g>'+
+  '<g class="sleeping-worker"><g class="sleeping-head"><circle cx="27" cy="56" r="6" fill="'+complexion+'"/><path d="M21 54q-1-8 8-5l4 4-8-1-2 4z" fill="#50434b"/><path d="m24 57 3 1" stroke="#534449" stroke-width="1"/></g><path class="sleep-blanket" d="M36 57q12-9 22 0h24v14H36z" fill="'+coats[coat]+'"/><path d="M40 61q14-4 22 2" fill="none" stroke="#d1dfd6" opacity=".5"/><g class="sleep-drift" fill="#c9e5dc" font-family="sans-serif" font-size="8"><text x="32" y="41">z</text><text x="40" y="33" font-size="6">z</text></g></g>'+
   '<path d="M92 60h11v4H92zm2 4h2v15h-2zm7 0h2v15h-2z" fill="#a28d77"/><path d="M97 59V48m-5 0h11l-3-8h-5z" fill="#dfbe8c" stroke="#c2b39c"/><g transform="translate(4 -2) scale(.9)">'+furniture+'</g>'+
   '</svg><svg class="desk-area" x="40%" width="59%" height="100%" viewBox="46 4 138 68" preserveAspectRatio="xMidYMax meet"><g transform="'+mirrored+'">'+
   officePrint(worker)+'<path d="M134 49l12-27 11 1 17 27z" fill="#f6c27d" opacity=".14"/><path d="M142 49h15m-8-1 5-15-7-10" fill="none" stroke="#b1aa9e" stroke-width="2"/><path d="m142 20 7-1 5 7-16 1z" fill="#e7bd85"/><path d="M140 27h12" stroke="#fff2b6" stroke-width="2"/>'+
@@ -107,7 +115,7 @@ export function renderOfficeScene(worker) {
   '<path d="M84 50h81v4H84z" fill="#c6a180"/><path d="M89 54h3v13h-3zm66 0h4v13h-4z" fill="#323745"/><path d="M141 54h12v10h-12z" fill="#6d645f"/><path d="M144 57h5" stroke="#bfae9a"/><path d="M128 46h4v4h-4z" fill="#d6c6b7"/>'+
   '<path d="M55 42q4-3 7 1l4 13h12v4H60z" fill="#293743" stroke="#7d8691"/><path d="M66 60v7m-8 2 8-3 9 3" fill="none" stroke="#b1a9a8" stroke-width="2"/>'+
   '<g class="seated-legs"><path d="m65 53 18 1 6 10-4 2-8-9-14-1z" fill="#232e3f"/><path d="m84 65 6-2 4 4H84z" fill="#202a37"/></g>'+
-  '<g class="desk-worker"><path d="M62 35q5-3 12 0l6 7 2 12H57l3-14z" fill="'+coats[coat]+'" stroke="#443e49" stroke-width="1.4"/><path d="m68 32 7 1-1 6-5 2-4-5z" fill="'+complexion+'"/><path d="M60 24q0-11 11-10 9 1 9 10l3 4-4 1-1 5q-6 5-14-2z" fill="'+complexion+'"/>'+headwear[head]+
+  '<g class="desk-worker"><path d="M62 35q5-3 12 0l6 7 2 12H57l3-14z" fill="'+coats[coat]+'" stroke="#443e49" stroke-width="1.4"/><g class="worker-head"><path d="m68 32 7 1-1 6-5 2-4-5z" fill="'+complexion+'"/><path d="M60 24q0-11 11-10 9 1 9 10l3 4-4 1-1 5q-6 5-14-2z" fill="'+complexion+'"/>'+headwear[head]+'</g>'+
   '<path d="m61 40 3 3" stroke="#e5d7be" stroke-width="2.6"/><g class="typing-arm"><path d="m73 40 8 8 10 1" fill="none" stroke="'+coats[coat]+'" stroke-width="5.5" stroke-linecap="round"/><path d="m90 49 6 1" stroke="'+complexion+'" stroke-width="3" stroke-linecap="round"/></g></g>'+
   '<path d="M13 53h9l-2 9h-5z" fill="#bd987d"/><path d="M17 54q-10-11-8-13 9 2 9 12-1-15 5-19 4 10-5 20 5-11 11-11-1 9-11 12" fill="#8ca99a"/></g></svg></svg>';
 }
@@ -402,4 +410,5 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     destroy(){resize.disconnect();motionObserver?.disconnect();observedRooms.clear();document.removeEventListener('visibilitychange',visibility);}
   };
 }
+
 

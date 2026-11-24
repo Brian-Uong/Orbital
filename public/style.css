@@ -645,22 +645,34 @@ body:has(#skyStill:checked) .workspace-sky *, body:has(#skyStill:checked) .distr
 
 /* Rooms use the entire floor, with proportional furniture and inexpensive motion. */
 .office-gallery{display:flex;flex-wrap:wrap;overflow:visible;gap:0}
-.office-room{flex:1 1 max(220px,var(--bay));container-type:inline-size;overflow:hidden;padding:0;justify-content:flex-start;background:#344254}
-.office-scene{height:clamp(112px,32cqw,196px);width:100%;overflow:hidden}
+.tower-site{--room-unit:clamp(.75px,.08vw,1px)}
+.office-room{flex:1 1 max(calc(360 * var(--room-unit)),var(--bay));container-type:inline-size;overflow:hidden;padding:0;justify-content:flex-start;background:#344254}
+.office-scene{height:calc(136 * var(--room-unit));width:100%;overflow:hidden}
+.office-scene .rest-area{x:calc(8 * var(--room-unit));width:calc(120 * var(--room-unit))}
+.office-scene .desk-area{x:calc(100% - 228 * var(--room-unit));width:calc(220 * var(--room-unit))}
+.office-scene .room-lounge{display:none;x:calc(140 * var(--room-unit));width:calc(100% - 380 * var(--room-unit))}
+@container(min-width:560px){.office-scene .room-lounge{display:block}}
 .office-plaque{min-height:40px;flex:1;padding:.5rem .65rem;gap:.3rem .65rem}
 .office-room .sleeping-worker{display:none}
 .office-room[data-motion=resting] .sleeping-worker{display:block}
 .office-room[data-motion=resting] :is(.desk-worker,.seated-legs){display:none}
 .office-room[data-motion=resting] .screen-light{opacity:.5}
 .office-room[data-motion=working] .typing-arm{transform-box:fill-box;transform-origin:15% 25%;animation:room-typing .8s ease-in-out infinite;animation-delay:var(--work-delay)}
-.office-room[data-motion=working] .desk-worker{transform-box:fill-box;transform-origin:50% 100%;animation:room-focus 5s ease-in-out infinite;animation-delay:var(--work-delay)}
+.office-room[data-motion=working] .desk-worker{transform-box:fill-box;transform-origin:50% 100%;animation:room-focus 11s ease-in-out infinite;animation-delay:var(--work-delay)}
 .office-room[data-motion=working] .screen-light{animation:room-screen 4s ease-in-out infinite;animation-delay:var(--work-delay)}
 .office-room[data-motion=resting] .sleep-blanket{transform-box:fill-box;transform-origin:50% 100%;animation:room-breathe 4.8s ease-in-out infinite;animation-delay:var(--work-delay)}
 .office-room[data-motion=resting] .sleep-drift{animation:room-sleep 5s ease-in-out infinite;animation-delay:var(--work-delay)}
 @keyframes room-typing{0%,45%,100%{transform:rotate(0)}20%,70%{transform:rotate(-5deg)}}
-@keyframes room-focus{0%,100%{transform:rotate(0)}40%,60%{transform:rotate(2deg)}}
+@keyframes room-focus{0%,30%,60%,100%{transform:rotate(0) translateY(0)}15%,45%{transform:rotate(2deg) translateY(.6px)}78%,85%{transform:rotate(-3deg) translateY(-1px)}}
+.office-room[data-motion=working] .worker-head{transform-box:fill-box;transform-origin:50% 90%;animation:room-glance 9s ease-in-out infinite;animation-delay:var(--work-delay)}
+.office-room[data-motion=working] .seated-legs{transform-box:fill-box;transform-origin:5% 0;animation:room-leg-shift 7s ease-in-out infinite;animation-delay:var(--work-delay)}
+.office-room[data-motion=resting] .sleeping-head{transform-box:fill-box;transform-origin:50% 70%;animation:room-sleep-turn 13s ease-in-out infinite;animation-delay:var(--work-delay)}
+@keyframes room-glance{0%,30%,55%,100%{transform:rotate(0)}15%,20%{transform:rotate(6deg)}70%,80%{transform:rotate(-7deg)}}
+@keyframes room-leg-shift{0%,25%,55%,100%{transform:rotate(0)}35%,45%{transform:rotate(5deg)}75%,85%{transform:rotate(-3deg)}}
+@keyframes room-sleep-turn{0%,35%,75%,100%{transform:rotate(0) translateX(0)}45%,60%{transform:rotate(-8deg) translateX(1px)}}
 @keyframes room-screen{0%,100%{opacity:.82}50%{opacity:1}}
 @keyframes room-breathe{0%,100%{transform:scaleY(1)}50%{transform:scaleY(1.07)}}
 @keyframes room-sleep{0%{opacity:0;transform:translateY(2px)}25%,60%{opacity:.75}100%{opacity:0;transform:translateY(-6px)}}
 .office-room:not([data-visible=true]) *,.desks-hidden .office-room *{animation-play-state:paused!important}
 @media(prefers-reduced-motion:reduce){.office-room *{animation:none!important}.office-room .sleep-drift{opacity:.65}}
+
