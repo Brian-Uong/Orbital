@@ -113,10 +113,11 @@ export function renderOfficeScene(worker) {
   officePrint(worker)+'<path d="M134 49l12-27 11 1 17 27z" fill="#f6c27d" opacity=".14"/><path d="M142 49h15m-8-1 5-15-7-10" fill="none" stroke="#b1aa9e" stroke-width="2"/><path d="m142 20 7-1 5 7-16 1z" fill="#e7bd85"/><path d="M140 27h12" stroke="#fff2b6" stroke-width="2"/>'+
   '<g class="screen-light">'+displays[desk]+'</g>'+
   '<path d="M84 50h81v4H84z" fill="#c6a180"/><path d="M89 54h3v13h-3zm66 0h4v13h-4z" fill="#323745"/><path d="M141 54h12v10h-12z" fill="#6d645f"/><path d="M144 57h5" stroke="#bfae9a"/><path d="M128 46h4v4h-4z" fill="#d6c6b7"/>'+
+  '<g class="desk-keyboard"><path d="m86 48 22-1 3 5H84z" fill="#344b5a" stroke="#acbdb7" stroke-width=".8"/><path d="M89 49h3m2 0h3m2 0h3m2 0h3m-16 2h11" stroke="#8fafb0" stroke-width=".8"/><path class="key-activity" d="M91 49h3m6 1h3" stroke="#d7f0d6" stroke-width="1.2"/></g>'+
   '<path d="M55 42q4-3 7 1l4 13h12v4H60z" fill="#293743" stroke="#7d8691"/><path d="M66 60v7m-8 2 8-3 9 3" fill="none" stroke="#b1a9a8" stroke-width="2"/>'+
   '<g class="seated-legs"><path d="m65 53 18 1 6 10-4 2-8-9-14-1z" fill="#232e3f"/><path d="m84 65 6-2 4 4H84z" fill="#202a37"/></g>'+
   '<g class="desk-worker"><path d="M62 35q5-3 12 0l6 7 2 12H57l3-14z" fill="'+coats[coat]+'" stroke="#443e49" stroke-width="1.4"/><g class="worker-head"><path d="m68 32 7 1-1 6-5 2-4-5z" fill="'+complexion+'"/><path d="M60 24q0-11 11-10 9 1 9 10l3 4-4 1-1 5q-6 5-14-2z" fill="'+complexion+'"/>'+headwear[head]+'</g>'+
-  '<path d="m61 40 3 3" stroke="#e5d7be" stroke-width="2.6"/><g class="typing-arm"><path d="m73 40 8 8 10 1" fill="none" stroke="'+coats[coat]+'" stroke-width="5.5" stroke-linecap="round"/><path d="m90 49 6 1" stroke="'+complexion+'" stroke-width="3" stroke-linecap="round"/></g></g>'+
+  '<path d="m61 40 3 3" stroke="#e5d7be" stroke-width="2.6"/><g class="typing-arm-alt"><path d="m66 41 10 6 14 1" fill="none" stroke="'+coats[coat]+'" stroke-width="4.5" stroke-linecap="round"/><path d="m90 48 6 0" stroke="'+complexion+'" stroke-width="3" stroke-linecap="round"/></g><g class="typing-arm"><path d="m73 40 9 9 16 1" fill="none" stroke="'+coats[coat]+'" stroke-width="5.5" stroke-linecap="round"/><path d="m98 50 6 0" stroke="'+complexion+'" stroke-width="3" stroke-linecap="round"/></g></g>'+
   '<path d="M13 53h9l-2 9h-5z" fill="#bd987d"/><path d="M17 54q-10-11-8-13 9 2 9 12-1-15 5-19 4 10-5 20 5-11 11-11-1 9-11 12" fill="#8ca99a"/></g></svg></svg>';
 }
 
@@ -410,5 +411,6 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     destroy(){resize.disconnect();motionObserver?.disconnect();observedRooms.clear();document.removeEventListener('visibilitychange',visibility);}
   };
 }
+
 
 
