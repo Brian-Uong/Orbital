@@ -80,26 +80,40 @@ function officePrint(worker) {
     '<svg x="157" y="9" width="19" height="12" viewBox="0 0 '+(2*letters.length)+' 14" preserveAspectRatio="none"><path fill="'+ink+'" d="'+tiles+'"/></svg>';
 }
 
+export function officeMotion(worker) {
+  if(worker.active===true)return 'working';
+  return ['idle','completed','verified'].includes(String(worker.status).toLowerCase())?'resting':'waiting';
+}
+
 export function renderOfficeScene(worker) {
-  const {head,desk,coat,mirror}=portraitFor(worker.id);
-  const mirrored=mirror ? 'translate(186 0) scale(-1 1)' : '';
+  const {head,desk,coat}=portraitFor(worker.id);
+  const mirrored=''; // Room orientation is shared so the bed and desk never overlap.
   const furniture=Object.hasOwn(wallDecor,worker.projectId) ? wallDecor[worker.projectId] : wallDecor.professional;
   const complexion=skin[hash('skin|'+worker.id)%skin.length];
-  return '<svg class="office-scene" aria-hidden="true" focusable="false" viewBox="0 0 186 72" preserveAspectRatio="xMidYMax meet"><g transform="'+mirrored+'">'+
-  '<path d="M0 0h186v72H0z" fill="#394252"/><path d="m0 0 8 6v49L0 65z" fill="#656275"/><path d="m186 0-9 6v49l9 10z" fill="#242f40"/><path d="M0 64l8-10h169l9 10v8H0z" fill="#5c5962"/><path d="m2 66 180-1m-167 4h38m32-6 9-8m61 14-12-13" stroke="#76717c" fill="none"/>'+
-  '<path d="M52 6h76v35H52z" fill="#202c41" stroke="#8d8c9a" stroke-width="2"/><path d="M54 8h72v31H54z" fill="#54667d"/><path d="M55 39V27h7v-5h7v12h6V18h10v14h6v-7h11v7h5V19h7v7h10v13" fill="#303d55"/><g fill="#cabda6"><path d="M77 22h2v2h-2zm4 4h2v2h-2zm28-2h2v2h-2zm-43 5h2v2h-2zm29 1h3v2h-3z"/></g><path d="M76 7v33m27-33v33M53 32h74" stroke="#9c9ba2" stroke-width="1.4"/><path d="M51 41h79" stroke="#c4b2a2" stroke-width="2"/>'+
-  furniture+officePrint(worker)+'<path d="M134 49l12-27 11 1 17 27z" fill="#f6c27d" opacity=".14"/><path d="M142 49h15m-8-1 5-15-7-10" fill="none" stroke="#b1aa9e" stroke-width="2"/><path d="m142 20 7-1 5 7-16 1z" fill="#e7bd85"/><path d="M140 27h12" stroke="#fff2b6" stroke-width="2"/>'+
+  return '<svg class="office-scene" aria-hidden="true" focusable="false" width="100%" height="100%">'+
+  '<svg class="room-shell" width="100%" height="100%" viewBox="0 0 360 120" preserveAspectRatio="none">'+
+  '<path d="M0 0h360v120H0z" fill="#344254"/><path d="M0 0h360v5H0z" fill="#8c9b9c"/><path d="M9 7h342v88H9z" fill="#435367"/><path d="M0 0l9 7v88L0 108zm360 0-9 7v88l9 13z" fill="#253446"/>'+
+  '<path d="M9 95h342l9 13v12H0v-12z" fill="#657078"/><path d="M0 108h360M40 120l30-25m80 25 10-25m95 25-10-25m85 25-30-25" fill="none" stroke="#7e898c" stroke-width=".7"/>'+
+  '<path d="M68 14h223v63H68z" fill="#203449" stroke="#95a9b0" stroke-width="2"/><path d="M71 17h217v57H71z" fill="#59748b"/><path d="M71 74V52h17V38h16v23h18V29h21v26h17V45h26v13h15V33h24v24h14V42h26v19h23v13z" fill="#314c64"/>'+
+  '<path d="M94 44h3v4h-3zm36-9h3v4h-3zm0 10h3v4h-3zm80-6h4v4h-4zm0 9h4v4h-4zm39 1h3v4h-3zm-76 7h3v4h-3z" fill="#b6d5ce" opacity=".7"/><path d="M124 15v61m55-61v61m55-61v61M69 61h220" stroke="#8ca5b0" stroke-width="1.5"/><path d="M64 78h231" stroke="#c0c7bd" stroke-width="3"/>'+
+  '<path d="M12 91h337" stroke="#bcc7c0" stroke-width="2"/><path d="M13 88h336" stroke="#91c5bd" opacity=".4"/>'+ '</svg>'+
+  '<svg class="rest-area" x="2%" y="0" width="38%" height="100%" viewBox="0 0 105 90" preserveAspectRatio="xMidYMax meet">'+
+  '<path d="M6 73h91v8H6z" fill="#3b4c5b"/><path d="M9 61h78v14H9z" fill="#c6a47f"/><path d="M9 58h78v12H9z" fill="#d4ded1"/><path d="M9 49h5v31H9zm76 9h5v22h-5z" fill="#9b7e68"/><rect x="16" y="56" width="22" height="8" rx="4" fill="#edf0df"/><path d="M40 59h44v12H40z" fill="'+coats[coat]+'"/><path d="M42 67h39" stroke="#d4dfcf" opacity=".5"/>'+
+  '<g class="sleeping-worker"><circle cx="27" cy="56" r="6" fill="'+complexion+'"/><path d="M21 54q-1-8 8-5l4 4-8-1-2 4z" fill="#50434b"/><path d="m24 57 3 1" stroke="#534449" stroke-width="1"/><path class="sleep-blanket" d="M36 57q12-9 22 0h24v14H36z" fill="'+coats[coat]+'"/><path d="M40 61q14-4 22 2" fill="none" stroke="#d1dfd6" opacity=".5"/><g class="sleep-drift" fill="#c9e5dc" font-family="sans-serif" font-size="8"><text x="32" y="41">z</text><text x="40" y="33" font-size="6">z</text></g></g>'+
+  '<path d="M92 60h11v4H92zm2 4h2v15h-2zm7 0h2v15h-2z" fill="#a28d77"/><path d="M97 59V48m-5 0h11l-3-8h-5z" fill="#dfbe8c" stroke="#c2b39c"/><g transform="translate(4 -2) scale(.9)">'+furniture+'</g>'+
+  '</svg><svg class="desk-area" x="40%" width="59%" height="100%" viewBox="46 4 138 68" preserveAspectRatio="xMidYMax meet"><g transform="'+mirrored+'">'+
+  officePrint(worker)+'<path d="M134 49l12-27 11 1 17 27z" fill="#f6c27d" opacity=".14"/><path d="M142 49h15m-8-1 5-15-7-10" fill="none" stroke="#b1aa9e" stroke-width="2"/><path d="m142 20 7-1 5 7-16 1z" fill="#e7bd85"/><path d="M140 27h12" stroke="#fff2b6" stroke-width="2"/>'+
   '<g class="screen-light">'+displays[desk]+'</g>'+
   '<path d="M84 50h81v4H84z" fill="#c6a180"/><path d="M89 54h3v13h-3zm66 0h4v13h-4z" fill="#323745"/><path d="M141 54h12v10h-12z" fill="#6d645f"/><path d="M144 57h5" stroke="#bfae9a"/><path d="M128 46h4v4h-4z" fill="#d6c6b7"/>'+
   '<path d="M55 42q4-3 7 1l4 13h12v4H60z" fill="#293743" stroke="#7d8691"/><path d="M66 60v7m-8 2 8-3 9 3" fill="none" stroke="#b1a9a8" stroke-width="2"/>'+
-  '<path d="m65 53 18 1 6 10-4 2-8-9-14-1z" fill="#232e3f"/><path d="m84 65 6-2 4 4H84z" fill="#202a37"/>'+
+  '<g class="seated-legs"><path d="m65 53 18 1 6 10-4 2-8-9-14-1z" fill="#232e3f"/><path d="m84 65 6-2 4 4H84z" fill="#202a37"/></g>'+
   '<g class="desk-worker"><path d="M62 35q5-3 12 0l6 7 2 12H57l3-14z" fill="'+coats[coat]+'" stroke="#443e49" stroke-width="1.4"/><path d="m68 32 7 1-1 6-5 2-4-5z" fill="'+complexion+'"/><path d="M60 24q0-11 11-10 9 1 9 10l3 4-4 1-1 5q-6 5-14-2z" fill="'+complexion+'"/>'+headwear[head]+
   '<path d="m61 40 3 3" stroke="#e5d7be" stroke-width="2.6"/><g class="typing-arm"><path d="m73 40 8 8 10 1" fill="none" stroke="'+coats[coat]+'" stroke-width="5.5" stroke-linecap="round"/><path d="m90 49 6 1" stroke="'+complexion+'" stroke-width="3" stroke-linecap="round"/></g></g>'+
-  '<path d="M13 53h9l-2 9h-5z" fill="#bd987d"/><path d="M17 54q-10-11-8-13 9 2 9 12-1-15 5-19 4 10-5 20 5-11 11-11-1 9-11 12" fill="#8ca99a"/></g></svg>';
+  '<path d="M13 53h9l-2 9h-5z" fill="#bd987d"/><path d="M17 54q-10-11-8-13 9 2 9 12-1-15 5-19 4 10-5 20 5-11 11-11-1 9-11 12" fill="#8ca99a"/></g></svg></svg>';
 }
 
 function room(worker) {
-  return '<button type="button" class="office-room" data-worker="'+safe(worker.id)+'" data-active="'+Boolean(worker.active)+'" aria-haspopup="dialog" aria-label="'+safe(worker.name+' · '+statusLabel(worker)+' · '+worker.projectName)+'">'+renderOfficeScene(worker)+
+  return '<button type="button" class="office-room" data-worker="'+safe(worker.id)+'" data-active="'+Boolean(worker.active)+'" data-motion="'+officeMotion(worker)+'" style="--work-delay:-'+(hash(worker.id)%40/10)+'s" aria-haspopup="dialog" aria-label="'+safe(worker.name+' · '+statusLabel(worker)+' · '+worker.projectName)+'">'+renderOfficeScene(worker)+
     '<span class="office-plaque"><strong>'+safe(worker.name)+'</strong><span class="office-state">'+safe(statusLabel(worker))+'</span></span></button>';
 }
 function textIfChanged(node, text) {
@@ -188,6 +202,7 @@ function reconcileFloor(view, floor, level, color, privateView) {
       view.rooms.set(worker.id,cached);
     } else {
       if (worker.active!==cached.worker.active) cached.el.dataset.active = String(Boolean(worker.active));
+      if (officeMotion(worker)!==officeMotion(cached.worker))cached.el.dataset.motion=officeMotion(worker);
       if (worker.name!==cached.worker.name) textIfChanged(cached.el.querySelector('.office-plaque strong'),worker.name);
       if (worker.active!==cached.worker.active || worker.status!==cached.worker.status || worker.name!==cached.worker.name || renamed) {
         const label = statusLabel(worker);
@@ -220,6 +235,12 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
   const root=by('officeTower'),dialog=by('officeDialog'),scene=by('towerSite');
   let floors=[],current=null,project=null,focus=false,privateView=false;
   const views = new Map();
+  const observedRooms=new Set();
+  const motionObserver=typeof IntersectionObserver==='function'?new IntersectionObserver(entries=>{
+    for(const entry of entries)entry.target.dataset.visible=String(entry.isIntersecting);
+  },{threshold:0}):null;
+  const visibility=()=>scene.classList.toggle('desks-hidden',document.hidden);
+  document.addEventListener('visibilitychange',visibility);visibility();
   let opener=null, previousDetail='';
   function roomNav() { for (const view of views.values()) updateNav(view); }
   const resize=new ResizeObserver(roomNav);resize.observe(root);
@@ -262,6 +283,11 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
     }
     if (document.activeElement!==activeElement && root.contains(activeElement)) activeElement.focus({preventScroll:true});
     for(const view of resized)updateNav(view);
+    const currentRooms=new Set([...views.values()].flatMap(view=>[...view.rooms.values()].map(room=>room.el)));
+    for(const el of observedRooms)if(!currentRooms.has(el)){motionObserver?.unobserve(el);observedRooms.delete(el);}
+    for(const el of currentRooms)if(!observedRooms.has(el)){
+      observedRooms.add(el);if(motionObserver)motionObserver.observe(el);else el.dataset.visible='true';
+    }
     textIfChanged(by('sceneFocus'),focus?'All floors':'Focus floor');
     by('sceneFocus').setAttribute('aria-pressed',String(focus));
   }
@@ -373,6 +399,7 @@ export function mountTower({selectProject,dateText,onRouteChange}) {
       if(current || dialog.open)clearOffice();
     },
     activeCount(){return floors.reduce((n,f)=>n+f.workers.filter(w=>w.active).length,0);},
-    destroy(){resize.disconnect();}
+    destroy(){resize.disconnect();motionObserver?.disconnect();observedRooms.clear();document.removeEventListener('visibilitychange',visibility);}
   };
 }
+

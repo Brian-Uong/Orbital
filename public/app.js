@@ -136,7 +136,8 @@ function renderSelection() {
 function scheduleExpiry() {
   const now=Date.now(),floors=state.floors;
   clearTimeout(expiryTimer);
-  const workerDeadlines=floors.flatMap(f=>f.workers.filter(w=>w.active).map(w=>Date.parse(w.expiresAt)||Date.parse(w.observedAt)+300000));
+  const visibleFloors=conversationFloors(state.snapshot,floors,state.access,now);
+  const workerDeadlines=[...floors,...visibleFloors].flatMap(f=>f.workers.filter(w=>w.active).map(w=>Date.parse(w.expiresAt)||Date.parse(w.observedAt)+300000));
   const deadlines=[];
   if(!privateView()&&state.agents.some(a=>a.status==='working'))deadlines.push(publicObserved+300000);
   if(privateView())for(const a of state.agents) {
@@ -577,6 +578,7 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
+
 
 
 

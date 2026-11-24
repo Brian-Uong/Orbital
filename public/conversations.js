@@ -10,7 +10,7 @@ function originalChat(value) {
 
 // Private room assignments are persistent. A Work ledger entry can be opened
 // from History without gaining a room in the illustrated building.
-export function conversationFloors(snapshot, historyFloors, access) {
+export function conversationFloors(snapshot, historyFloors, access, now=Date.now()) {
   if (!['owner', 'service'].includes(access)) return historyFloors;
   const center = snapshot?.commandCenter;
   const ledger = center?.execution;
@@ -25,6 +25,13 @@ export function conversationFloors(snapshot, historyFloors, access) {
         r.threadUrl === url && (r.project === id || id === 'evaluation' && chat.name === ledger.evaluationGate?.name))
         .sort((a,b)=>String(b.observedAt).localeCompare(String(a.observedAt))) : [];
       const receipt = matches[0];
+      const signal=matches.find(r=>['started','working','progress','idle','completed','verified','reply','result','blocked','failed'].includes(r.type || r.id?.split('/')[0]));
+      const signalType=signal && (signal.type || signal.id?.split('/')[0]);
+      const observed=Date.parse(signal?.observedAt), deadline=Math.min(observed+300000,signal?.expiresAt?Date.parse(signal.expiresAt):Infinity);
+      const liveSignal=['started','working','progress'].includes(signalType);
+      const active=Boolean(liveSignal && observed<=now && now<deadline);
+      const status=!url?'Awaiting verified link':active?'Working':liveSignal?'Activity unconfirmed':
+        ['blocked','failed'].includes(signalType)?signalType:'Idle';
       const type = r => r.type || r.id?.split('/')[0];
       const sent = matches.find(r => type(r)==='sent'), reply = matches.find(r => ['reply','result'].includes(type(r)));
       const verified = ledger.scheduledOriginalChatVerification;
@@ -39,8 +46,8 @@ export function conversationFloors(snapshot, historyFloors, access) {
         ['Runtime model',reply?.actualModel || 'Unverified'], ['Verified unattended result',at(scheduled)]
       ];
       return {id:id + '/' + handle, handle, name:chat.name, projectId:id, projectName:name,
-        conversation:true, evidence, role:chat.scope, chatUrl:url, active:false,
-        status:url ? 'Idle' : 'Awaiting verified link', activity:receipt?.summary,
+        conversation:true, evidence, role:chat.scope, chatUrl:url, active, expiresAt:active?new Date(deadline).toISOString():undefined,
+        status, activity:receipt?.summary,
         observedAt:receipt?.observedAt, tag:receipt?.tag};
     });
     return {id, name, workers, allWorkers:[...workers, ...archived]};
@@ -69,3 +76,4 @@ export function conversationFloors(snapshot, historyFloors, access) {
     scope:'Checks each revision against its requirements.', url:gate.routeStatus === 'verified' && gate.verifiedUrl}]));
   return levels;
 }
+
