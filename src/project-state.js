@@ -4,7 +4,7 @@ import {isStationOwner, ApiError, json, bodyOf, matchesKey, conditionalUpdate} f
 
 const SECTOR_KEY = 'orbital/v2/project-state.json';
 const SECTOR_NAMES = new Map([
-  ['professional', 'Professional'], ['product-design', 'Product Design'],
+  ['professional', 'Professional'], ['stella-zhang', 'Stella Zhang'],
   ['personal-dashboard', 'Personal Dashboard'], ['personal-website', 'Personal Website'],
   ['financial-advice', 'Financial Advice']
 ]);
@@ -297,6 +297,22 @@ export async function handleProjectState(request, env, seed) {
       preserveDecisions(current, incoming, service);
       const oldLedger = current.commandCenter.execution || {};
       const nextLedger = incoming.commandCenter.execution || {};
+      for (const key of ['projectConversationReceipts', 'workflowTransitions']) {
+        const previous = oldLedger[key] || [];
+        const next = nextLedger[key] || [];
+        if (!Array.isArray(next)) throw new ApiError(400, 'Invalid private evidence ledger.');
+        const byId = new Map();
+        for (const row of next) {
+          const value = JSON.stringify(row);
+          if (!row?.id || (byId.has(row.id) && byId.get(row.id) !== value)) {
+            throw new ApiError(409, 'Keep stable, unambiguous private evidence IDs.');
+          }
+          byId.set(row.id, value);
+        }
+        if (previous.some(row => byId.get(row.id) !== JSON.stringify(row))) {
+          throw new ApiError(409, 'Preserve accepted conversation receipts and workflow transitions.');
+        }
+      }
       if (oldLedger.evaluationGate && !nextLedger.evaluationGate ||
           !service && ['evaluationGate','evaluationReceipts'].some(k => JSON.stringify(oldLedger[k]) !== JSON.stringify(nextLedger[k]))) {
         throw new ApiError(409,'Preserve the private evaluation policy and receipts.');
@@ -335,6 +351,10 @@ export async function handleProjectState(request, env, seed) {
       }
       for (const row of reviews) {
         const prior=current.commandCenter.execution?.releaseReviews?.find(r=>r.id===row.id);
+        if (row.status === 'awaiting owner approval' && JSON.stringify(row) !== JSON.stringify(prior) &&
+            !evaluationPassed(nextLedger, row)) {
+          throw new ApiError(409, 'An exact evaluator PASS is required before creating or changing an owner review. Keep unevaluated work in private intake.');
+        }
         const newClaim=['releaseClaimId','revisionClaimId'].some(key=>row[key] && row[key]!==prior?.[key]);
         if (newClaim) {
           const sector=current.agents.find(a=>a.id===(row.projectId || row.project) || a.name===row.project);
@@ -374,7 +394,3 @@ export async function handleProjectState(request, env, seed) {
       error instanceof ApiError ? error.status : 503);
   }
 }
-
-
-
-

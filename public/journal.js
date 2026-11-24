@@ -49,10 +49,11 @@ export function journalEvents(snapshot) {
       title:r.title + ' · ' + r.status, artifactUrl:r.prUrl || r.githubUrl || r.liveUrl || r.evidenceUrl});
   }
   for (const r of list(center.websiteImprovements?.backlog)) {
-    if (r?.status !== 'published and verified' || !r.id || !r.githubUrl || !r.deploymentId) continue;
+    const resultUrl = r?.githubUrl || r?.mirrorUrl;
+    if (r?.status !== 'published and verified' || !r.id || !resultUrl || !r.deploymentId) continue;
     const version = '/v' + r.siteVersion;
     add({id:'deployment/' + r.deploymentId, agentId:center.id, at:r.verifiedAt || r.completedAt,
-      title:(r.owner || 'Station') + ' · ' + r.title, artifactUrl:r.githubUrl},
+      title:(r.owner || 'Station') + ' · ' + r.title, artifactUrl:resultUrl},
       ['station-release/' + r.id + version, 'station/' + r.id + '/' + r.revision + version]);
   }
   const order = r => Number.isFinite(Date.parse(r.at)) ? Date.parse(r.at) : -Infinity;

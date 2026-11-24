@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {journalDay,journalEvents,journalGroups,journalMarkup} from '../public/journal.js';
 
+test('station mirror receipts appear once with their actual time or remain undated',()=>{
+  const receipt={id:'maintenance',title:'Verified maintenance',status:'published and verified',deploymentId:'deploy-1',siteVersion:1,mirrorUrl:'https://example.org/commit/abc',verifiedAt:'2026-11-24T18:00:00Z'};
+  const state={agents:[],events:[],commandCenter:{id:'control',websiteImprovements:{backlog:[receipt,receipt]}}};
+  const rows=journalEvents(state);
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].artifactUrl,receipt.mirrorUrl);
+  assert.equal(rows[0].at,receipt.verifiedAt);
+  delete receipt.verifiedAt;
+  assert.equal(journalGroups(journalEvents(state),'2026-11-24T20:00:00Z').undated.length,1);
+  delete receipt.deploymentId;
+  assert.equal(journalEvents(state).length,0);
+});
+
 test('Pacific midnight, spring gap and repeated autumn hour',()=>{
   for(const [stamp,date] of [
     ['2026-11-22T07:59:59Z','2026-11-21'],['2026-11-22T08:00:00Z','2026-11-22'],

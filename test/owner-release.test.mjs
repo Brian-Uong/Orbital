@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {handleProjectState} from '../src/project-state.js';
 import {workspaceViews} from '../public/workspace.js';
-const seed=JSON.parse(readFileSync(new URL('../examples/station.json',import.meta.url)));
+const seed=JSON.parse(readFileSync(new URL('../Orbital-Agent-State.json',import.meta.url)));
 const owner={'oai-authenticated-user-id':'owner','oai-authenticated-user-email':'owner@example.test',origin:'https://test.example'};
 function setup(overrides={}){
  let stored=null,rev=0;
@@ -19,6 +19,39 @@ function setup(overrides={}){
 const service={'Orbit-Sync-Key':'synthetic-service'};
 async function stateOf(request,headers=owner){const r=await request('/api/state',null,null,headers);return {data:await r.json(),tag:r.headers.get('ETag')};}
 function advance(data){data.updatedAt=new Date(Math.max(Date.now(),Date.parse(data.updatedAt)+1)).toISOString();return data;}
+
+test('service sync preserves original conversation and timing evidence by stable ID',async()=>{
+ const {request}=setup();let current=await stateOf(request);
+ const next=advance(structuredClone(current.data));
+ next.commandCenter.execution.projectConversationReceipts=[{id:'sent/one',messageId:'one',type:'sent',observedAt:'2024-01-01T00:00:00Z'}];
+ next.commandCenter.execution.workflowTransitions=[{id:'ready/one',stage:'ready',at:'2024-01-01T00:00:00Z'}];
+ assert.equal((await request('/api/state',next,current.tag,service)).status,200);
+ current=await stateOf(request);
+ for(const key of ['projectConversationReceipts','workflowTransitions']) {
+  for(const mutate of [rows=>[],rows=>[{...rows[0],at:'2025-01-01T00:00:00Z'}],rows=>[...rows,{...rows[0],type:'completed'}]]) {
+   const changed=advance(structuredClone(current.data));changed.commandCenter.execution[key]=mutate(changed.commandCenter.execution[key]);
+   assert.equal((await request('/api/state',changed,current.tag,service)).status,409);
+  }
+ }
+ const appended=advance(structuredClone(current.data));appended.commandCenter.execution.projectConversationReceipts.push({id:'reply/two',messageId:'two'});
+ assert.equal((await request('/api/state',appended,current.tag,service)).status,200);
+});
+
+test('new owner decisions require their own exact evaluation even when the artifact already passed',async()=>{
+ const {request}=setup();let current=await stateOf(request);
+ const next=advance(structuredClone(current.data));const ledger=next.commandCenter.execution;
+ ledger.evaluationGate={path:'/c/evaluator'};
+ const row={id:'NEXT',project:'professional',title:'Reviewed output',action:'Publish output',destination:'Approved destination',status:'awaiting owner approval',artifactDigest:'digest'};
+ ledger.releaseReviews.push(row);
+ assert.equal((await request('/api/state',next,current.tag,service)).status,409);
+ const pass={reviewId:'OTHER',artifactDigest:'digest',verdict:'PASS',messageId:'reply',expected:'Expected result',observed:'Actual result',evidenceUrl:'https://example.org/evidence',evaluatorPath:'/c/evaluator',review:structuredClone(row)};
+ ledger.evaluationReceipts=[pass];
+ assert.equal((await request('/api/state',next,current.tag,service)).status,409);
+ pass.reviewId=row.id;
+ assert.equal((await request('/api/state',next,current.tag,service)).status,200);
+ current=await stateOf(request);const changed=advance(structuredClone(current.data));changed.commandCenter.execution.releaseReviews[1].action='Merge instead';
+ assert.equal((await request('/api/state',changed,current.tag,service)).status,409);
+});
 
 test('a blocked approved release can be repaired without losing approval history or approving its replacement',async()=>{
  const {request,review}=setup();let current=await stateOf(request);
