@@ -53,6 +53,20 @@ test('new owner decisions require their own exact evaluation even when the artif
  assert.equal((await request('/api/state',changed,current.tag,service)).status,409);
 });
 
+test('a later exact scope receipt can register the reviewed action without rewriting accepted PASS evidence',async()=>{
+ const {request}=setup();let current=await stateOf(request);
+ const next=advance(structuredClone(current.data));const ledger=next.commandCenter.execution;
+ ledger.evaluationGate={path:'/c/evaluator'};
+ const row={id:'SCOPED',project:'personal-dashboard',title:'Display copy',action:'Publish exact patch',destination:'Existing hosted Site',status:'awaiting owner approval',artifactDigest:'digest'};
+ const base={id:'evaluation/SCOPED/digest',reviewId:row.id,artifactDigest:row.artifactDigest,verdict:'PASS',messageId:'reply',expected:'Expected result',observed:'Actual result',evidenceUrl:'https://example.org/evidence',evaluatorPath:'/c/evaluator'};
+ ledger.evaluationReceipts=[base,{...base,id:'evaluation/SCOPED/digest/accepted-readback',reviewScope:{project:row.project,artifactDigest:row.artifactDigest,action:row.action,destination:row.destination}}];
+ ledger.releaseReviews.push(row);
+ assert.equal((await request('/api/state',next,current.tag,service)).status,200);
+ current=await stateOf(request);
+ const changed=advance(structuredClone(current.data));changed.commandCenter.execution.releaseReviews[1].destination='Another Site';
+ assert.equal((await request('/api/state',changed,current.tag,service)).status,409);
+});
+
 test('a blocked approved release can be repaired without losing approval history or approving its replacement',async()=>{
  const {request,review}=setup();let current=await stateOf(request);
  await request('/api/release-approval',{reviewId:review.id,expectedReview:JSON.stringify(review)},current.tag);
