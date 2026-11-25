@@ -17,3 +17,16 @@ test('only the latest evaluator reply on the exact artifact permits its owner re
   assert.equal(visible(),false);
   assert.equal(evaluationPassed(ledger,{...row,id:'sample-repair'}),false);
 });
+
+test('an immutable PASS can bind an exact approval scope without rewriting its receipt',()=>{
+  const row={id:'sample',title:'Display copy',status:'awaiting owner approval',action:'Publish exact patch',destination:'Existing hosted Site',artifactDigest:'sample-digest',project:'example'};
+  const base={reviewId:row.id,artifactDigest:row.artifactDigest,evaluatorPath:'/example',messageId:'reply',evidenceUrl:'https://example.org/check',expected:'One link',observed:'One link',verdict:'PASS'};
+  const ledger={evaluationGate:{path:'/example'},evaluationReceipts:[base]};
+  assert.equal(evaluationPassed(ledger,row),false);
+  ledger.evaluationReceipts.push({...base,id:'accepted-readback',reviewScope:{project:row.project,artifactDigest:row.artifactDigest,action:row.action,destination:row.destination}});
+  assert.equal(evaluationPassed(ledger,row),true);
+  assert.equal(evaluationPassed(ledger,{...row,action:'Merge instead'}),false);
+  assert.equal(evaluationPassed(ledger,{...row,destination:'Another Site'}),false);
+  assert.equal(evaluationPassed(ledger,{...row,project:'other'}),false);
+  assert.equal(evaluationPassed(ledger,{...row,artifactDigest:'another-digest'}),false);
+});
