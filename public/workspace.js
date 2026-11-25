@@ -170,6 +170,7 @@ function sectorPlan(sector, now) {
       acceptanceTest:sector.workAcceptance, blocker:sector.blocker, observedAt:live.observedAt || sector.workStartedAt,
       requiresOwnerApproval:sector.requiresOwnerApproval, ownerDecisionRequired:sector.ownerDecisionRequired, ownerDecision:sector.ownerDecision, approver:sector.approver, approval:sector.approval,
       partialEvidenceUrl:sector.partialEvidenceUrl, waitingDetails:sector.waitingDetails,
+      reviewIds:sector.reviewIds, releaseReviewId:sector.releaseReviewId, evaluationReviewId:sector.evaluationReviewId, artifactDigest:sector.artifactDigest,
       waitingFor:sector.waitingFor, dependency:sector.dependency, dependencyType:sector.dependencyType,
       dependencyOwner:sector.dependencyOwner, ownerAction:sector.ownerAction, nextAction:sector.nextAction,
       nextCheckAt:sector.nextCheckAt, expectedAt:sector.expectedAt}, 'Current');
@@ -177,6 +178,7 @@ function sectorPlan(sector, now) {
   add(sector.pendingAssignment,'Current');
   add(sector.queuedFollowup,'Next');
   add(sector.researchFollowup,'Next');
+  add(sector.publicationFollowup,'Waiting');
   return [...byTag.values()];
 }
 
@@ -229,24 +231,25 @@ function waitingExplanation({row,reason}) {
   const details=row.waitingDetails || {};
   const explicitNeed=text(details.needed) || text(row.waitingFor) || text(row.blocker) || text(row.dependency);
   const scheduled=reason==='Scheduled wait' || details.kind==='scheduled';
+  const evaluating=lower(row.status)==='awaiting evaluation';
   const stale=reason==='Awaiting fresh progress';
   const observations=scheduled && /settle|next round|observation/i.test([row.task,row.waitingFor,row.dependency].filter(Boolean).join(' '));
   const needed=explicitNeed || (observations?'More settled rounds or observations for the planned evaluation.':
     scheduled?'The scheduled time or external data to become available.':
     stale?'A fresh progress report from the assigned worker.':'The specific missing requirement has not been recorded yet.');
-  const owner=text(details.owner) || text(row.dependencyOwner) ||
+  const owner=text(details.owner) || text(row.dependencyOwner) || (evaluating?'Orbital / independent evaluator':'') ||
     (scheduled?'External data or the scheduled time; coordinator checks availability.':
       stale?'Coordinator: verify the worker’s status.':'Coordinator: identify what is missing and who can provide it.');
-  const action=text(details.ownerAction) || text(row.ownerAction) ||
+  const action=text(details.ownerAction) || text(row.ownerAction) || (evaluating?'No action from you is needed for evaluation.':'') ||
     (scheduled?'No action from you is currently recorded.':
       stale?'No action from you is currently recorded. The coordinator needs to check progress.':
       'Not specified yet. The coordinator needs to provide an exact request before you can act.');
-  const next=text(details.nextAction) || text(row.nextAction) ||
+  const next=text(details.nextAction) || text(row.nextAction) || (evaluating?'Orbital obtains an independent check of this exact revision. A PASS can then open a scoped owner decision; other independent work may continue.':'') ||
     (scheduled?'The coordinator checks availability on its hourly run and continues when the required data or time is available.':
       stale?'The coordinator checks whether work is running, completed, or blocked and updates this item.':
       'The coordinator must name the missing input, who provides it, and the step that unblocks this work.');
   return {needed,owner,action,next,expectedAt:details.expectedAt || row.expectedAt,
-    nextCheckAt:row.nextCheckAt,label:scheduled?'Waiting for data or time':stale?'Progress needs checking':reason==='Missing source'?'Source material needed':'Input or access needed'};
+    nextCheckAt:row.nextCheckAt,label:evaluating?'Independent evaluation · Orbital acts next':scheduled?'Waiting for data or time':stale?'Progress needs checking':reason==='Missing source'?'Source material needed':'Input or access needed'};
 }
 function waitingDependency(item,timeline,now) {
   const {row,tag}=item;
@@ -318,6 +321,7 @@ function revisedReview(receipt, releases) {
 }
 function releaseLane(row) {
   const status=lower(row.status);
+  if(status==='deferred')return 'deferred';
   if(['denied','declined','closed','cancelled','canceled','superseded','deferred'].includes(status))return 'archive';
   if(repairStatuses.has(status) || text(row.releaseError))return 'blocked';
   if(row.responseId)return 'blocked';
@@ -357,10 +361,11 @@ function releaseGroups(reviews,sectors,allowRepair,timeline,now,center) {
     ['queued','Approved and queued','Approved work waiting for the hourly coordinator. It has not been confirmed as pushed.'],
     ['publishing','Publishing or awaiting verification','A push may be in progress or recorded, but verified completion is still pending.'],
     ['manual','Completed reviews · manual use','The approved review is complete. Open its evidence for manual use.'],
-    ['published','Published and verified','Recorded completion with a verification timestamp and a result link. A verified pull request does not mean production was deployed.']];
+    ['published','Published and verified','Recorded completion with a verification timestamp and a result link. A verified pull request does not mean production was deployed.'],
+    ['deferred','On hold by you','Preserved for later. No action or reminder is due until you explicitly reopen this work.']];
   return groups.map(([key,title,description])=>{
     const rows=reviews.filter(r=>releaseLane(r)===key && !(r.responseId && reviews.some(c=>c.revisionOfResponseId===r.responseId)));
-    const collapsible=key==='published' || key==='manual';
+    const collapsible=key==='published' || key==='manual' || key==='deferred';
     return '<section class="release-group release-group-'+key+'" aria-labelledby="release-heading-'+key+'">'+(collapsible?'<details class="release-fold"><summary>':'<header>')+'<h2 id="release-heading-'+key+'">'+title+'</h2><span class="release-count">'+rows.length+'</span>'+(collapsible?'</summary>':'</header>')+'<p class="release-help">'+description+'</p>'+
       (rows.length?'<div class="release-list">'+rows.map(r=>{
         const p=sectors.find(s=>s.id===(r.project || r.projectId) || s.name===(r.project || r.projectId));
@@ -437,6 +442,12 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
   const timeline=observedTransitions(snapshot);
   const reviewed = list(ledger?.releaseReviews).filter(row => evaluationPassed(ledger,row));
   const decisions = decisionInbox(sectors,reviewed,ledger?.evaluationGate ? [] : waiting);
+  // Registered decisions are authoritative over stale assignment projections.
+  const registered = list(ledger?.releaseReviews).filter(row => evaluationPassed(ledger,row) || ['deferred','published','manual','archive','queued','publishing'].includes(releaseLane(row)));
+  const background = waiting.filter(item => !item.decision && !registered.some(row =>
+    row.id === item.row.releaseReviewId || row.id === item.row.evaluationReviewId ||
+    item.row.reviewIds?.includes(row.id) ||
+    (item.row.artifactDigest && row.artifactDigest === item.row.artifactDigest && row.project === item.sector.id)));
   // The sidebar only needs the count. Build each screen on its first visit
   // and reuse it for the lifetime of this snapshot and filter selection.
   let historyHtml, roadmapHtml, decisionsHtml, waitingHtml;
@@ -478,7 +489,7 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       const superseded = new Set(revisions.filter(item => item.revised).map(item => item.receipt.reviewId));
       const progress=releaseGroups(releases.filter(row => !superseded.has(row.id)),sectors,allowSkip,timeline,now,snapshot.commandCenter);
       const direct=decisions.filter(d=>!revisions.some(item=>item.revised?.id===d.id));
-      const resolved = item => item.revised && (['manual','published','archive'].includes(releaseLane(item.revised)));
+      const resolved = item => item.revised && (['manual','published','archive','deferred'].includes(releaseLane(item.revised)));
       const groups = [
         ['Requested revisions', revisions.filter(item => !item.revised)],
         ['Revisions prepared', revisions.filter(item => item.revised && !resolved(item))],
@@ -508,6 +519,11 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
       return decisionsHtml = '<section class="release-group release-group-pending"><header><h2>Awaiting your approval</h2><span class="release-count">'+direct.length+'</span></header>'+decisionList(direct,allowSkip,timeline,now)+'</section>'+progress+responseHistory;
     },
     get waiting() { return waitingHtml ??= waitingItems(sectors,waiting,decisions,timeline,now); },
+    get attention() {
+      return '<p class="decision-total">'+decisions.length+' pending '+(decisions.length===1?'decision':'decisions')+' · Same decisions as Needs Brian</p>'+
+        (decisions.length ? '<ul class="wait-reviews">'+decisions.map(row => '<li data-attention-review="'+esc(row.id)+'"><a href="#needs/'+encodeURIComponent(row.key)+'">'+esc(row.title)+'</a><span> · '+esc(row.project)+'</span></li>').join('')+'</ul>' : empty('No decisions need you right now.'));
+    },
+    get backgroundWaiting() { return waitingItems(sectors,background,[],timeline,now); },
     count:decisions.length,
     filters:Object.entries(kinds).map(([value,label]) => '<option value="' + value + '"' + (value === activeKind ? ' selected' : '') + '>' + label + '</option>').join('')
   };
@@ -527,5 +543,3 @@ export function discloseReview(target) {
   summary.focus({preventScroll:true});
   summary.scrollIntoView({block:'nearest'});
 }
-
-

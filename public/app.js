@@ -108,7 +108,8 @@ function readouts() {
   $('assignedCount').textContent=state.agents.length;
   $('workingCount').textContent=privateView() ? state.floors.reduce((n,f)=>n+f.workers.filter(w=>w.active).length,0) : state.agents.filter(a=>status(a)==='working').length;
   $('workingCount').previousElementSibling.lastChild.textContent=privateView()?'Workers active':'Sectors working';
-  $('attentionCount').textContent=state.agents.filter(a=>a.blocker||['waiting','blocked','error'].includes(status(a))).length;
+  $('attentionCount').previousElementSibling.textContent=privateView()?'Needs Brian':'Sectors waiting';
+  if(!privateView())$('attentionCount').textContent=state.agents.filter(a=>a.blocker||['waiting','blocked','error'].includes(status(a))).length;
   const next=state.center.nextBriefAt??state.center.nextReviewAt;
   $('briefTime').textContent=valid(next)?format(next,{hour:'numeric',minute:'2-digit',timeZoneName:'short'}):'Pending';
   $('briefTime').title=dateText(next);
@@ -248,12 +249,13 @@ function renderWorkViews(view) {
   }
   const data=workCache.data;
   $('decisionCount').textContent=String(data.count);
+  $('attentionCount').textContent=String(data.count);
   if(view==='history'){
     markup($('historyKind'),data.filters);
     $('historyKind').value=Array.from($('historyKind').options).some(o=>o.value===kind)?kind:'all';
   }
   if(view==='needs')renderDisclosures($('needsBody'),data.decisions,'data-decision-key',$('pageTitle'));
-  else if(view==='overview')renderDisclosures($('waitingBody'),data.waiting,'data-wait-key',$('waitingHeading'));
+  else if(view==='overview')renderDisclosures($('waitingBody'),data.attention+'<h3>Other work status</h3><p>These waits are separate from approval decisions. Each item identifies who acts next.</p>'+data.backgroundWaiting,'data-wait-key',$('waitingHeading'));
   else if(destinations[view])markup($(destinations[view]),data[view]);
 }
 function render(purge=false) {
@@ -578,8 +580,3 @@ window.addEventListener('online',refresh);
 window.addEventListener('pageshow',polling);
 window.addEventListener('pagehide',e=>{suspend();if(!e.persisted)station.destroy();});
 polling();
-
-
-
-
-
