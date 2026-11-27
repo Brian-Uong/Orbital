@@ -10,9 +10,12 @@ const planned = new Set(['queued', 'planned', 'assigned', 'owner-skipped', 'skip
 const stateOf = value => string(value).toLowerCase();
 const terminal = new Set(['verified', 'completed', 'failed', 'blocked', 'idle', 'waiting']);
 const officialFloors = new Map([
-  ['professional','Professional'],['product-design','Product Design'],['personal-dashboard','Personal Dashboard'],
+  ['professional','Professional'],['stella-zhang','Stella Zhang'],['personal-dashboard','Personal Dashboard'],
   ['personal-website','Personal Website'],['financial-advice','Financial Advice']
 ]);
+// Station maintenance and coordinator receipts belong to one Orbital project.
+const stationIds = new Set(['orbital', 'orbital-agent-station', 'orbital-build']);
+const projectIdFor = id => stationIds.has(id) ? 'orbital' : id;
 const lifecycleTypes = new Set(['created','assigned','started','progress','working','idle','completed','verified','failed','blocked','waiting']);
 const tagOn = (tag, floor) => typeof tag === 'string' && tag.startsWith(floor+'-') && /^\d+$/.test(tag.slice(floor.length+1));
 
@@ -171,8 +174,9 @@ export function buildTowerFloors(snapshot, {access, now=Date.now()}={}) {
         !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(string(row.projectId)) || !string(row.projectName) || !string(row.source) ||
         typeof row.at !== 'string' || !Number.isFinite(Date.parse(row.at))) continue;
     ids.add(row.id);
-    if (!byProject.has(row.projectId)) byProject.set(row.projectId,[]);
-    byProject.get(row.projectId).push(row);
+    const projectId=projectIdFor(row.projectId);
+    if (!byProject.has(projectId)) byProject.set(projectId,[]);
+    byProject.get(projectId).push({...row,projectId,projectName:projectId==='orbital'?'Orbital':row.projectName});
   }
   for (const id of [...byProject.keys()].sort()) {
     if (!sectors.has(id)) {
