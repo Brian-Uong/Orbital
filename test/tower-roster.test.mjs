@@ -109,3 +109,15 @@ test('named assignments create a room before completion; planning, bad handles a
   const added=buildTowerFloors(data,{access:'service',now})[1];
   assert.equal(added.workers.length,2);assert.equal(added.status,'assigned');assert.ok(added.workers.every(w=>!w.active));
 });
+
+test('station and coordinator receipts share one Orbital project without dropping workers',()=>{
+ const data=snapshot();
+ data.commandCenter.execution.workerEvents=[
+  {id:'station',type:'completed',projectId:'orbital-agent-station',projectName:'Orbital Agent Station',executorId:lead,source:'Work',at:stamp(-1000)},
+  {id:'coordinator',type:'completed',projectId:'orbital',projectName:'Orbital',executorId:contributor,source:'Work',at:stamp(-500)}
+ ];
+ const orbital=buildTowerFloors(data,{access:'owner',now}).filter(f=>f.id==='orbital');
+ assert.equal(orbital.length,1);
+ assert.equal(orbital[0].name,'Orbital');
+ assert.deepEqual(orbital[0].workers.map(w=>w.handle),[lead,contributor]);
+});
