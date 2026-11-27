@@ -261,3 +261,69 @@ test('release groups separate approval, execution, verified publication and repa
  assert.match(section('blocked'),/data-fix-review/);assert.doesNotMatch(section('blocked'),/data-approve-review/);
  assert.doesNotMatch(workspaceViews(snapshot).decisions,/data-fix-review/);
 });
+
+const evidenceDigest = 'a'.repeat(64);
+const evaluatorPath = '/c/sample-evaluator';
+const producerReply = {
+  project:'professional', tag:'professional-071', messageId:'producer-message', type:'producer completed',
+  threadUrl:'https://chatgpt.com/g/sample-project/c/sample-producer', threadTitle:'Example project',
+  observedAt:stamp(4000), summary:'Returned exact project artifact.',
+  artifactDigest:evidenceDigest, artifactUrl:link('evaluated'), privateTranscript:'never-render-transcript'
+};
+const evalReply = {
+  ...producerReply, messageId:'evaluator-message', type:'evaluation passed', threadUrl:'https://chatgpt.com/g/sample-project'+evaluatorPath,
+  observedAt:stamp(3000), summary:'Verified the exact revision.', evidenceUrl:link('evaluation')
+};
+function projectHistory({receipts=[producerReply,evalReply], evaluations=[], releases=[], workRuns=[], sectorId=sector.id}={}) {
+  return workspaceViews({
+    agents:[sector],commandCenter:{execution:{
+      workRuns, evaluationGate:{path:evaluatorPath}, projectConversationReceipts:receipts,
+      evaluationReceipts:evaluations, releaseReviews:releases
+    }}
+  },{sectorId,now}).history;
+}
+
+test('History combines evaluated chat artifacts and legacy results once per exact revision',()=>{
+  const legacyDuplicate={...finished,tag:producerReply.tag,artifactDigest:evidenceDigest,artifactUrl:producerReply.artifactUrl};
+  const otherRevision={...legacyDuplicate,artifactDigest:'b'.repeat(64),summary:'Earlier distinct revision.'};
+  const history=projectHistory({receipts:[producerReply,{...producerReply},evalReply,{...evalReply}],workRuns:[finished,legacyDuplicate,otherRevision]});
+  assert.match(history,/Evaluated private artifact/);
+  assert.match(history,/Open independent evaluation/);
+  assert.match(history,/Example project/);
+  assert.match(history,/Earlier distinct revision/);
+  assert.equal(history.split(producerReply.summary).length,2);
+  assert.equal(history.split(finished.summary).length,2);
+  assert.doesNotMatch(history,/never-render-transcript/);
+});
+
+test('History excludes deliveries, incomplete work, and mismatched or returned evaluations',()=>{
+  for (const receipts of [
+    [{...producerReply,type:'sent'},evalReply],
+    [producerReply,{...evalReply,artifactDigest:'b'.repeat(64)}],
+    [producerReply,{...evalReply,project:'different-sector'}],
+    [producerReply,{...evalReply,threadUrl:'https://example.org'+evaluatorPath}],
+    [producerReply,{...evalReply,evidenceUrl:''}],
+    [producerReply,evalReply,{...evalReply,type:'evaluation returned',observedAt:stamp(1000)}]
+  ]) assert.doesNotMatch(projectHistory({receipts}),/Returned exact project artifact/);
+  assert.doesNotMatch(projectHistory({workRuns:[{...finished,status:'awaiting evaluation'}]}),/Adjusted counts checked/);
+});
+
+test('History distinguishes a verified pull request and a verified live release using exact evidence',()=>{
+  const review={id:'SAMPLE-R1',project:sector.id,artifactDigest:evidenceDigest,verifiedAt:stamp(2000),
+    diffUrl:link('patch'),title:'Sample publication'};
+  const pr='https://github.com/sample/repo/pull/1', site='https://example.org/results';
+  const evaluation={...evalReply,reviewId:review.id,evaluatorPath,verdict:'PASS'};
+  const inputs={receipts:[{...producerReply,artifactUrl:''}],evaluations:[evaluation]};
+  const pull=projectHistory({...inputs,releases:[{...review,status:'feature branch and PR created',pullRequestUrl:pr}]});
+  assert.match(pull,/Pull request verified/);
+  assert.ok(pull.includes(pr));
+  assert.doesNotMatch(pull,/Verified release|Open verified live site/);
+  const released={...review,status:'published and verified',liveUrl:site,siteVersion:3};
+  const live=projectHistory({...inputs,releases:[released]});
+  assert.match(live,/Verified release · v3/);
+  assert.equal(live.split(site).length,2);
+  assert.doesNotMatch(live,/Verified project releases/);
+  assert.match(projectHistory({...inputs,releases:[released],sectorId:''}),/Verified release · v3/);
+  assert.doesNotMatch(projectHistory({releases:[{...released,status:'deployed'}]}),/Verified release|Open verified live site/);
+  assert.doesNotMatch(projectHistory({releases:[{...released,artifactDigest:'b'.repeat(64)}]}),/Verified release · v3/);
+});

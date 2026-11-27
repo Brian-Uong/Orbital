@@ -43,6 +43,8 @@ function kindOf(row) {
   return 'other';
 }
 function availability(row) {
+  if (row.release) return row.release.label;
+  if (row.evaluatorEvidence) return 'Evaluated private artifact';
   const value = lower(row.releaseStatus || row.publicationStatus);
   if (['live','published','deployed'].includes(value)) return 'Published';
   if (safeLink(row.artifactUrl).startsWith('https://chatgpt.com/library') || /private|offline|unpublished/i.test([row.constraints,row.limitations,value].join(' '))) return 'Private artifact';
@@ -60,14 +62,82 @@ function credits(row) {
     return '<li><strong>' + esc(workerName(id)) + '</strong>' + (id === row.executorId ? ' · Lead' : '') + note + result + '</li>';
   }).join('') + '</ul>';
 }
-function historyRows(sector, records) {
+const incompleteHistoryStates = new Set(['queued','running','working','in progress','assigned','planned','claimed',
+  'sent','waiting','awaiting evaluation','awaiting verification','blocked','owner skipped','skipped']);
+const producerResults = new Set(['reply','producer reply','completed','producer completed','revision completed']);
+const revisionDigest = row => /^[0-9a-f]{64}$/i.test(text(row.artifactDigest)) ? row.artifactDigest.toLowerCase() : '';
+const sameRevision = (a,b) => a.tag === b.tag && revisionDigest(a) && revisionDigest(a) === revisionDigest(b);
+const newest = (a,b) => instant(stamp(b)) - instant(stamp(a));
+
+function originalChatHistory(sector, ledger) {
+  const evaluatorPath = text(ledger?.evaluationGate?.path);
+  if (!evaluatorPath.startsWith('/c/')) return [];
+  const conversationPath = row => {
+    const url = safeLink(row.threadUrl);
+    const parsed = url && new URL(url);
+    return parsed?.origin === 'https://chatgpt.com' && /\/c\/[^/]+$/.test(parsed.pathname) ? parsed.pathname : '';
+  };
+  const isEvaluator = row => conversationPath(row).endsWith(evaluatorPath);
+  const chat = list(ledger.projectConversationReceipts).filter(row => row.project === sector.id &&
+    text(row.tag) && revisionDigest(row) && text(row.messageId) && instant(row.observedAt));
+  const verdicts = chat.filter(isEvaluator).map(row => ({
+    ...row,
+    verdict: row.verdict || (row.type === 'evaluation passed' ? 'PASS' : row.type === 'evaluation returned' ? 'RETURN' : '')
+  }));
+  for (const row of list(ledger.evaluationReceipts)) {
+    if (row.evaluatorPath === evaluatorPath && (!row.project || row.project === sector.id) &&
+        (!row.reviewScope?.project || row.reviewScope.project === sector.id) &&
+        (!row.review?.project || row.review.project === sector.id) && instant(row.observedAt)) verdicts.push(row);
+  }
+  verdicts.sort((a,b) => newest(a,b) || Number(b.verdict === 'RETURN') - Number(a.verdict === 'RETURN'));
+  const reviews = list(ledger.releaseReviews).filter(row => (row.project || row.projectId) === sector.id);
+  const results = new Map();
+  for (const producer of chat.filter(row => producerResults.has(row.type) && conversationPath(row) && !isEvaluator(row)).sort(newest)) {
+    const key = producer.tag + '/' + revisionDigest(producer);
+    if (results.has(key)) continue;
+    const matching = verdicts.filter(row => sameRevision(row,producer) && instant(row.observedAt) >= instant(producer.observedAt));
+    if (matching.find(row => row.verdict === 'PASS' || row.verdict === 'RETURN')?.verdict !== 'PASS') continue;
+    const pass = matching.find(row => row.verdict === 'PASS' && text(row.messageId) && safeLink(row.evidenceUrl));
+    if (!pass) continue;
+    const matchingReviews = reviews.filter(row => revisionDigest(row) === revisionDigest(producer) &&
+      (!pass.reviewId || pass.reviewId === row.id));
+    const outcome = matchingReviews.filter(row => instant(row.verifiedAt) >= instant(pass.observedAt) &&
+      (verifiedRelease(row) || (lower(row.status) === 'feature branch and pr created' && safeLink(row.pullRequestUrl || row.prUrl))))
+      .sort(newest)[0];
+    const artifactUrl = [producer.artifactUrl, ...matchingReviews.map(row => row.diffUrl || row.artifactUrl)].map(safeLink).find(Boolean);
+    if (!artifactUrl || !text(producer.summary)) continue;
+    const liveUrl = outcome && safeLink(outcome.liveUrl);
+    const prUrl = outcome && safeLink(outcome.pullRequestUrl || outcome.prUrl);
+    const githubUrl = outcome && safeLink(outcome.githubUrl);
+    const release = liveUrl ? {url:liveUrl,label:'Verified release'+(Number.isInteger(outcome.siteVersion) ? ' · v'+outcome.siteVersion : ''),link:'Open verified live site'} :
+      prUrl ? {url:prUrl,label:'Pull request verified',link:'Open pull request'} :
+      githubUrl ? {url:githubUrl,label:'GitHub push verified',link:'Open GitHub result'} : null;
+    results.set(key, {
+      tag:producer.tag, artifactDigest:revisionDigest(producer), status:'verified',
+      verifiedAt:release ? outcome.verifiedAt : pass.observedAt, summary:producer.summary,
+      artifactUrl, source:producer.executionSource || 'Original project chat', origin:producer.threadTitle,
+      test:pass.summary || pass.observed || 'Independent evaluation passed for this exact artifact.',
+      evaluatorEvidence:pass.evidenceUrl, limitations:producer.limitations,
+      release, releaseId:release ? outcome.id : undefined
+    });
+  }
+  return [...results.values()];
+}
+
+function historyRows(sector, records, original) {
   const entries = [...records, sector.workEvidence].filter(Boolean);
   const previous = sector.previousVerifiedResult;
   if (previous?.tag && !entries.some(row => row.tag === previous.tag && (row.artifactUrl || row.reviewUrl) === (previous.artifactUrl || previous.reviewUrl))) {
     entries.push({...previous,status:'verified'});
   }
-  const rows = entries.filter(row => row && text(row.tag).slice(0, text(row.tag).lastIndexOf('-')) === sector.id && /^\d+$/.test(text(row.tag).split('-').at(-1)) && (text(row.summary) || text(row.evidence)) && !['queued','running','assigned','planned','owner skipped'].includes(lower(row.status)));
-  rows.sort((a,b) => instant(stamp(b)) - instant(stamp(a)));
+  const rows = entries.filter(row => row && text(row.tag).slice(0, text(row.tag).lastIndexOf('-')) === sector.id && /^\d+$/.test(text(row.tag).split('-').at(-1)) && (text(row.summary) || text(row.evidence)) && !incompleteHistoryStates.has(lower(row.status)));
+  for (const row of original) {
+    const legacy = rows.filter(item => item.tag === row.tag &&
+      (revisionDigest(item) ? sameRevision(item,row) : safeLink(item.artifactUrl || item.reviewUrl) === row.artifactUrl)).sort(newest);
+    for (const duplicate of legacy) rows.splice(rows.indexOf(duplicate),1);
+    rows.push({...legacy[0],...row});
+  }
+  rows.sort(newest);
   const unique = new Map();
   for (const row of rows) {
     const key = JSON.stringify([row.tag, row.artifactUrl || row.reviewUrl, row.evidence || row.test || row.summary, row.status]);
@@ -86,12 +156,13 @@ function historyDisplay(row) {
 }
 function revision(row) {
   const status = row.verificationOnly ? 'Verification' : text(row.status);
-  const result = artifactLink(row.artifactUrl || row.reviewUrl, verified(row) ? 'Open result' : 'Open partial evidence');
+  const result = artifactLink(row.artifactUrl || row.reviewUrl, verified(row) ? 'Open result' : 'Open partial evidence') +
+    artifactLink(row.evaluatorEvidence,'Open independent evaluation') + artifactLink(row.release?.url,row.release?.link);
   return '<div class="workspace-revision"><p class="workspace-meta">' + [date(stamp(row)),esc(status),esc(availability(row))].filter(Boolean).join(' · ') + '</p>' +
     '<h3>' + esc(row.summary || row.evidence) + '</h3>' +
     '<dl class="workspace-fields">' + caption('Assignment brief',row.intendedOutcome || row.assignmentSummary || 'Assignment brief unrecorded') +
     '<div><dt>' + (row.verificationOnly ? 'Verified by' : 'Executor') + '</dt><dd>' + credits(row) + '</dd></div>' +
-    caption('Specialist',row.specialistName) + caption('Execution source',row.source) +
+    caption('Specialist',row.specialistName) + caption('Original project chat',row.origin) + caption('Execution source',row.source) +
     caption('Verification',row.test || row.evidence) + caption('Acceptance test',row.acceptanceTest) +
     caption('Limitations',row.limitations || row.constraints) + '</dl>' + (result ? '<div class="workspace-actions">' + result + '</div>' : '') + '</div>';
 }
@@ -105,14 +176,15 @@ function sectorHistory(sector, rows) {
     ([...groups].map(([tag,items]) => '<article class="panel workspace-card"><p class="workspace-meta">' + esc(tag) + '</p>' + revision(items[0]) +
       (items.length > 1 ? '<details class="workspace-revisions"><summary>Earlier records (' + (items.length-1) + ')</summary>' + items.slice(1).map(revision).join('') + '</details>' : '') + '</article>').join('') || empty('No matching history for this sector.')) + '</div>';
 }
+const latestHistoryResult = rows => rows.find(row => verified(row) && safeLink(row.artifactUrl || row.reviewUrl));
 function historyCard(sector, rows) {
-  const recent = rows.find(row => verified(row) && safeLink(row.artifactUrl || row.reviewUrl));
+  const recent = latestHistoryResult(rows);
   return '<article class="panel workspace-card"><h2><a href="' + path(sector.id) + '">' + esc(sector.name) + '</a></h2>' +
-    (recent ? '<p class="workspace-meta">Latest verified result · ' + date(stamp(recent)) + '</p><p>' + esc(recent.summary || recent.evidence) + '</p>' +
+    (recent ? '<p class="workspace-meta">Latest verified result · ' + date(stamp(recent)) + (recent.evaluatorEvidence ? ' · '+esc(availability(recent)) : '') + '</p><p>' + esc(recent.summary || recent.evidence) + '</p>' +
       (recent.intendedOutcome && recent.intendedOutcome !== recent.summary ? '<p><strong>Purpose</strong> · '+esc(recent.intendedOutcome)+'</p>' : '') +
       (recent.limitations ? '<p><strong>Limitations</strong> · '+esc(recent.limitations)+'</p>' : '') +
       (text(recent.test || recent.evidence) ? '<p><strong>Verified</strong> · ' + esc(recent.test || recent.evidence) + '</p>' : '') : empty('No matching verified deliverable.')) +
-    '<div class="workspace-actions"><a class="thread" href="' + path(sector.id) + '">View history</a>' + (recent ? artifactLink(recent.artifactUrl || recent.reviewUrl,'Open latest result') : '') + '</div></article>';
+    '<div class="workspace-actions"><a class="thread" href="' + path(sector.id) + '">View history</a>' + (recent ? artifactLink(recent.release?.url || recent.artifactUrl || recent.reviewUrl,'Open latest result') : '') + '</div></article>';
 }
 function ownerDecision(item) {
   const status = lower(item.status);
@@ -455,12 +527,17 @@ export function workspaceViews(snapshot, {sectorId = '', kind = 'all', now = Dat
     get history() {
       if (historyHtml !== undefined) return historyHtml;
       const records = list(snapshot?.commandCenter?.execution?.workRuns);
-      const rowsFor = sector => historyRows(sector,records).filter(row => activeKind === 'all' || kindOf(row) === activeKind).map(historyDisplay);
       const selected = sectors.find(sector => sector.id === sectorId);
-      historyHtml = selected ? sectorHistory(selected,rowsFor(selected)) :
-        '<div class="workspace-grid">' + sectors.map(sector => historyCard(sector,rowsFor(sector))).join('') + '</div>';
+      const displayed = new Map((selected ? [selected] : sectors).map(sector => [
+        sector.id,historyRows(sector,records,originalChatHistory(sector,ledger))
+          .filter(row => activeKind === 'all' || kindOf(row) === activeKind).map(historyDisplay)
+      ]));
+      const representedReleases = new Set((selected ? displayed.get(selected.id) :
+        [...displayed.values()].map(latestHistoryResult)).map(row => row?.releaseId).filter(Boolean));
+      historyHtml = selected ? sectorHistory(selected,displayed.get(selected.id)) :
+        '<div class="workspace-grid">' + sectors.map(sector => historyCard(sector,displayed.get(sector.id))).join('') + '</div>';
       const released=list(snapshot?.commandCenter?.execution?.releaseReviews).filter(row =>
-        verifiedRelease(row) && !stationProject(row) && (!selected || row.project===selected.id || row.projectId===selected.id));
+        verifiedRelease(row) && !representedReleases.has(row.id) && !stationProject(row) && (!selected || row.project===selected.id || row.projectId===selected.id));
       if(released.length && activeKind==='all') historyHtml='<section><h2>Verified project releases</h2>'+released.map(releaseDescription).join('')+'</section>'+historyHtml;
       return historyHtml;
     },
